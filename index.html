@@ -1,0 +1,226 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Envialite - Personal Mail Merge</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📧 Envialite</h1>
+            <p>Personal Mail Merge Tool</p>
+        </header>
+
+        <!-- Tab Navigation -->
+        <div class="tab-navigation">
+            <button class="tab-btn active" onclick="showTab('settings')">📧 Settings</button>
+            <button class="tab-btn" onclick="showTab('template')">📝 Template</button>
+            <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
+            <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
+            <button class="tab-btn" onclick="showTab('preview')">👁️ Preview</button>
+        </div>
+
+        <!-- Tab Content Cards -->
+        <div id="settings" class="tab-card active">
+            <div class="card-header">
+                <h2>📧 Email Settings</h2>
+            </div>
+            <div class="card-content">
+                <!-- SMTP Configuration -->
+                <div class="settings-section">
+                    <h3>🔧 SMTP Configuration</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="smtpServer">SMTP Server:</label>
+                            <input type="text" id="smtpServer" placeholder="smtp.gmail.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="smtpPort">SMTP Port:</label>
+                            <input type="number" id="smtpPort" placeholder="587" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="smtpUser">SMTP Username:</label>
+                            <input type="email" id="smtpUser" placeholder="your-email@gmail.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="smtpPassword">SMTP Password:</label>
+                            <input type="password" id="smtpPassword" placeholder="your-app-password" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <button onclick="testSmtpConnection()">🔍 Test Connection</button>
+                        <span id="smtpTestResult" style="margin-left: 10px;"></span>
+                    </div>
+                </div>
+
+
+            </div>
+        </div>
+
+        <div id="template" class="tab-card">
+            <div class="card-header">
+                <h2>📝 Email Composition</h2>
+            </div>
+            <div class="card-content">
+                <!-- Email Headers -->
+                <div class="email-headers">
+                    <h3>📧 Email Headers</h3>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="fromEmail">From Email:</label>
+                            <input type="email" id="fromEmail" placeholder="your-email@gmail.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="toEmail">To Email:</label>
+                            <input type="email" id="toEmail" placeholder="recipient@example.com" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="ccEmail">CC Email (Optional):</label>
+                            <input type="email" id="ccEmail" placeholder="cc@example.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="bccEmail">BCC Email (Optional):</label>
+                            <input type="email" id="bccEmail" placeholder="bcc@example.com" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="emailSubject">Email Subject:</label>
+                        <input type="text" id="emailSubject" placeholder="Hello {{name}}!" />
+                    </div>
+                </div>
+
+                <!-- Email Body -->
+                <div class="email-body">
+                    <h3>📝 Message Body</h3>
+                    <div class="form-group">
+                        <label for="emailBody">Email Content (HTML allowed):</label>
+                        <textarea id="emailBody" rows="10" placeholder="Hi {{name}},
+
+Thank you for your interest in {{product}}.
+
+We will contact you within {{timeframe}}.
+
+Best regards,
+Your Company"></textarea>
+                    </div>
+                </div>
+
+                <!-- Attachments -->
+                <div class="email-attachments">
+                    <h3>📎 Constant Attachments</h3>
+                    <div class="form-group">
+                        <label for="emailAttachments">Select Files (same for all emails):</label>
+                        <select id="emailAttachments" multiple>
+                            <option value="">Select files to attach...</option>
+                        </select><br>
+                        <small>Select multiple files using Ctrl+Click (Cmd+Click on Mac)</small>
+                    </div>
+                    
+                    <!-- Variable Attachments -->
+                    <h3>🔄 Variable Attachments</h3>
+                    <div class="form-group">
+                        <label for="variableAttachments">Dynamic Attachments (from CSV):</label>
+                        <input type="text" id="variableAttachments" placeholder="{{attachments}}" />
+                        <small>Use template variables like {{attachments}} to read from CSV column named "attachments"</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="attachmentDelimiter">Delimiter (optional):</label>
+                        <input type="text" id="attachmentDelimiter" placeholder=";" maxlength="3" style="width: 100px;" />
+                        <small>Character to split multiple attachment filenames (e.g., ";" for "file1.pdf;file2.pdf")</small>
+                    </div>
+                </div>
+
+                <!-- Template Variables Help -->
+                <div class="template-help">
+                    <h3>💡 Template Variables</h3>
+                    <p>Use <code>{{variable}}</code> syntax in any field. Variables are replaced with CSV data:</p>
+                    <ul>
+                        <li><code>{{name}}</code> → John Doe</li>
+                        <li><code>{{email}}</code> → john@example.com</li>
+                        <li><code>{{product}}</code> → Product A</li>
+                        <li><code>{{attachment:{{product}}.pdf}}</code> → Dynamic attachment selection</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <div id="data" class="tab-card">
+            <div class="card-header">
+                <h2>📊 CSV Data</h2>
+            </div>
+            <div class="card-content">
+                <div class="form-group">
+                    <label for="csvData">CSV Data (flexible columns):</label>
+                    <textarea id="csvData" rows="12" placeholder="name,email,product,timeframe
+John Doe,john@example.com,Product A,24 hours
+Jane Smith,jane@example.com,Product B,48 hours
+
+Or without email column:
+name,product,price
+John Doe,Product A,$19.99
+Jane Smith,Product B,$24.99"></textarea>
+                </div>
+            </div>
+        </div>
+
+        <div id="attachments" class="tab-card">
+            <div class="card-header">
+                <h2>📎 Attachments</h2>
+            </div>
+            <div class="card-content">
+                <div class="upload-section">
+                    <div class="form-group">
+                        <label for="fileUpload">Upload Attachment:</label>
+                        <input type="file" id="fileUpload" multiple />
+                        <small>Supported formats: PDF, DOC, DOCX, TXT, JPG, PNG (max 10MB per file)</small>
+                    </div>
+                    <button onclick="uploadFiles()">📤 Upload Files</button>
+                </div>
+
+                <div class="attachments-list" id="attachmentsList">
+                    <h3>📋 Uploaded Files</h3>
+                    <div id="attachmentsContent">No files uploaded yet</div>
+                </div>
+
+            </div>
+        </div>
+
+        <div id="preview" class="tab-card">
+            <div class="card-header">
+                <h2>👁️ Preview & Send</h2>
+            </div>
+            <div class="card-content">
+                <div class="actions-section">
+                    <button id="previewBtn" onclick="previewEmails()">👁️ Preview Emails</button>
+                    <button id="sendBtn" onclick="sendEmails()">🚀 Send Emails</button>
+                    <button id="saveBtn" onclick="saveData()">💾 Save Data</button>
+                    <button id="loadBtn" onclick="loadData()">📂 Load Data</button>
+                </div>
+
+                <div class="preview-section" id="previewSection" style="display: none;">
+                    <h3>📬 Email Preview</h3>
+                    <div class="preview-navigation">
+                        <button id="prevEmail" onclick="navigateEmail(-1)" disabled>⬅️ Previous</button>
+                        <span id="emailCounter">Email 1 of 1</span>
+                        <button id="nextEmail" onclick="navigateEmail(1)" disabled>➡️ Next</button>
+                    </div>
+                    <div id="previewContent"></div>
+                </div>
+
+                <div class="results-section" id="resultsSection" style="display: none;">
+                    <h3>📊 Send Results</h3>
+                    <div id="resultsContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
