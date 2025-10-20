@@ -42,6 +42,9 @@ class EnvialiteApp {
         // Set up event listeners
         this.setupEventListeners();
 
+        // Initialize table editor
+        this.initializeTableEditor();
+
         console.log('Envialite initialized');
     }
 
@@ -212,13 +215,25 @@ class EnvialiteApp {
     generateEmailPreviews() {
         this.emailPreviews = [];
 
+        // Check if SMTP username is a valid email for fallback
+        const smtpEmailFallback = this.isValidEmail(this.smtpUser) ? this.smtpUser : null;
+        if (this.smtpUser && !smtpEmailFallback) {
+            this.showStatus('Warning: SMTP username does not appear to be an email address. From field may be empty.', 'error');
+        }
+
         this.recipients.forEach((recipient, index) => {
-            const mergedFrom = this.mergeTemplate(this.fromEmail, recipient);
+            let mergedFrom = this.mergeTemplate(this.fromEmail, recipient);
             const mergedTo = this.mergeTemplate(this.toEmail, recipient);
             const mergedCc = this.mergeTemplate(this.ccEmail, recipient);
             const mergedBcc = this.mergeTemplate(this.bccEmail, recipient);
             const mergedSubject = this.mergeTemplate(this.emailSubject, recipient);
             const mergedBody = this.mergeTemplate(this.emailBody, recipient);
+
+            // Use SMTP username as fallback if no From email is provided
+            if (!mergedFrom && smtpEmailFallback) {
+                mergedFrom = smtpEmailFallback;
+                console.log(`Using SMTP username as From email for recipient ${index + 1}`);
+            }
 
             // Get attachments for this email
             const emailAttachments = this.getAttachmentsForEmail(recipient);
@@ -241,53 +256,293 @@ class EnvialiteApp {
         const preview = this.emailPreviews[this.currentEmailIndex];
         if (!preview) return;
 
-        const previewContent = document.getElementById('previewContent');
-        const emailCounter = document.getElementById('emailCounter');
+        // Update navigation buttons
         const prevBtn = document.getElementById('prevEmail');
         const nextBtn = document.getElementById('nextEmail');
+        const emailCounter = document.getElementById('emailCounter');
 
-        // Update navigation buttons
         prevBtn.disabled = this.currentEmailIndex === 0;
         nextBtn.disabled = this.currentEmailIndex === this.emailPreviews.length - 1;
-
-        // Update counter
         emailCounter.textContent = `Email ${this.currentEmailIndex + 1} of ${this.emailPreviews.length}`;
 
-        // Generate detailed email preview
-        const recipientInfo = preview.recipient.email ?
-            `To: ${preview.recipient.name || preview.recipient.email}` :
-            `Row ${preview.recipient._rowNumber}: ${preview.recipient.name || 'No name column'}`;
+        // Populate editable fields with merged content (variables replaced)
+        this.populateEditablePreview(preview);
 
-        let attachmentsHtml = '';
-        if (preview.attachments.length > 0) {
-            attachmentsHtml = `
-                <div class="preview-email-attachments">
-                    <h4>📎 Attachments (${preview.attachments.length}):</h4>
-                    <ul>
-                        ${preview.attachments.map(att => `<li>${att.filename} (${this.formatFileSize(att.size || 0)})</li>`).join('')}
-                    </ul>
-                </div>
-            `;
+        // Populate the attachment picker with available attachments
+        this.populateAttachmentPicker();
+
+        // Store original template values for reset functionality
+        this.currentPreviewOriginal = {
+            from: this.fromEmail, // Store original template
+            to: this.toEmail,
+            cc: this.ccEmail,
+            bcc: this.bccEmail,
+            subject: this.emailSubject,
+            body: this.emailBody,
+            attachments: [...preview.attachments]
+        };
+
+        // Initialize preview attachments management
+        this.currentPreviewAttachments = new Map();
+        preview.attachments.forEach(att => {
+            this.currentPreviewAttachments.set(att.filename, att);
+        });
+
+        this.displayPreviewAttachments();
+    }
+
+    populateAttachmentPicker() {
+        const picker = document.getElementById('previewAttachmentPicker');
+        if (!picker) return;
+
+        // Clear existing options (except the first one)
+        while (picker.children.length > 1) {
+            picker.removeChild(picker.lastChild);
         }
 
-        previewContent.innerHTML = `
-            <div class="preview-email">
-                <div class="preview-email-header">
-                    <div class="preview-email-field"><strong>From:</strong> ${this.escapeHtml(preview.from)}</div>
-                    <div class="preview-email-field"><strong>To:</strong> ${this.escapeHtml(preview.to)}</div>
-                    ${preview.cc ? `<div class="preview-email-field"><strong>CC:</strong> ${this.escapeHtml(preview.cc)}</div>` : ''}
-                    ${preview.bcc ? `<div class="preview-email-field"><strong>BCC:</strong> ${this.escapeHtml(preview.bcc)}</div>` : ''}
-                    <div class="preview-email-field"><strong>Subject:</strong> ${this.escapeHtml(preview.subject)}</div>
-                </div>
+        // Add options for each available attachment
+        for (const [filename, fileData] of this.attachments) {
+            // Check if this attachment is already in the current preview
+            const alreadyInPreview = this.currentPreviewAttachments.has(filename);
 
-                <div class="preview-email-body">
-                    <strong>Message:</strong><br>
-                    ${preview.body.replace(/\n/g, '<br>')}
-                </div>
+            if (!alreadyInPreview) {
+                const option = document.createElement('option');
+                option.value = filename;
+                option.textContent = `${filename} (${this.formatFileSize(fileData.size)})`;
+                picker.appendChild(option);
+            }
+        }
 
-                ${attachmentsHtml}
-            </div>
-        `;
+        // Reset the picker to default option
+        picker.value = '';
+    }
+
+    addAttachmentFromPicker() {
+        const picker = document.getElementById('previewAttachmentPicker');
+        const selectedFilename = picker.value;
+
+        if (!selectedFilename) return;
+
+        // Get the attachment data
+        const fileData = this.attachments.get(selectedFilename);
+        if (!fileData) return;
+
+        // Add to current preview attachments
+        this.currentPreviewAttachments.set(selectedFilename, fileData);
+
+        // Refresh the display
+        this.displayPreviewAttachments();
+        this.populateAttachmentPicker(); // Refresh to remove the added option
+
+        this.showStatus(`Added ${selectedFilename} to email`, 'success');
+    }
+
+    populateEditablePreview(preview) {
+        document.getElementById('previewFrom').value = preview.from || '';
+        document.getElementById('previewTo').value = preview.to || '';
+        document.getElementById('previewCc').value = preview.cc || '';
+        document.getElementById('previewBcc').value = preview.bcc || '';
+        document.getElementById('previewSubject').value = preview.subject || '';
+        document.getElementById('previewBody').value = preview.body || '';
+    }
+
+    savePreviewChanges() {
+        const preview = this.emailPreviews[this.currentEmailIndex];
+        if (!preview) return;
+
+        // Get edited values
+        const editedFrom = document.getElementById('previewFrom').value;
+        const editedTo = document.getElementById('previewTo').value;
+        const editedCc = document.getElementById('previewCc').value;
+        const editedBcc = document.getElementById('previewBcc').value;
+        const editedSubject = document.getElementById('previewSubject').value;
+        const editedBody = document.getElementById('previewBody').value;
+
+        // Update the preview object
+        preview.from = editedFrom;
+        preview.to = editedTo;
+        preview.cc = editedCc;
+        preview.bcc = editedBcc;
+        preview.subject = editedSubject;
+        preview.body = editedBody;
+
+        // Update attachments
+        preview.attachments = Array.from(this.currentPreviewAttachments.values());
+
+        // Update the CSV data if this is based on a CSV row
+        if (preview.recipient) {
+            this.updateCSVFromPreviewChanges(preview);
+        }
+
+        this.showStatus('Preview changes saved', 'success');
+    }
+
+    refreshPreviewVariables() {
+        const preview = this.emailPreviews[this.currentEmailIndex];
+        if (!preview || !preview.recipient) return;
+
+        // Get current field values (which might contain variables)
+        const currentFrom = document.getElementById('previewFrom').value;
+        const currentTo = document.getElementById('previewTo').value;
+        const currentCc = document.getElementById('previewCc').value;
+        const currentBcc = document.getElementById('previewBcc').value;
+        const currentSubject = document.getElementById('previewSubject').value;
+        const currentBody = document.getElementById('previewBody').value;
+
+        // Re-merge with current CSV data
+        const refreshedFrom = this.mergeTemplate(currentFrom, preview.recipient);
+        const refreshedTo = this.mergeTemplate(currentTo, preview.recipient);
+        const refreshedCc = this.mergeTemplate(currentCc, preview.recipient);
+        const refreshedBcc = this.mergeTemplate(currentBcc, preview.recipient);
+        const refreshedSubject = this.mergeTemplate(currentSubject, preview.recipient);
+        const refreshedBody = this.mergeTemplate(currentBody, preview.recipient);
+
+        // Update the preview object and display
+        preview.from = refreshedFrom;
+        preview.to = refreshedTo;
+        preview.cc = refreshedCc;
+        preview.bcc = refreshedBcc;
+        preview.subject = refreshedSubject;
+        preview.body = refreshedBody;
+
+        // Update display fields
+        this.populateEditablePreview(preview);
+
+        this.showStatus('Variables refreshed from CSV data', 'success');
+    }
+
+    resetPreviewToOriginal() {
+        const original = this.currentPreviewOriginal;
+        if (!original) return;
+
+        // Reset form fields
+        document.getElementById('previewFrom').value = original.from || '';
+        document.getElementById('previewTo').value = original.to || '';
+        document.getElementById('previewCc').value = original.cc || '';
+        document.getElementById('previewBcc').value = original.bcc || '';
+        document.getElementById('previewSubject').value = original.subject || '';
+        document.getElementById('previewBody').value = original.body || '';
+
+        // Reset attachments
+        this.currentPreviewAttachments = new Map();
+        original.attachments.forEach(att => {
+            this.currentPreviewAttachments.set(att.filename, att);
+        });
+        this.displayPreviewAttachments();
+
+        this.showStatus('Preview reset to original', 'success');
+    }
+
+    updateCSVFromPreviewChanges(preview) {
+        // This would update the CSV data based on preview changes
+        // For now, we'll just update the CSV data in memory
+        this.updateCSVFromTable();
+    }
+
+    async uploadPreviewFiles() {
+        const fileInput = document.getElementById('previewFileUpload');
+        const files = fileInput.files;
+
+        if (files.length === 0) {
+            this.showStatus('Please select files to upload', 'error');
+            return;
+        }
+
+        let uploadedCount = 0;
+        for (const file of files) {
+            try {
+                if (file.size > 10 * 1024 * 1024) { // 10MB limit
+                    throw new Error(`File ${file.name} is too large (max 10MB)`);
+                }
+
+                await this.addPreviewAttachment(file);
+                uploadedCount++;
+            } catch (error) {
+                console.error(`Error uploading ${file.name}:`, error);
+                this.showStatus(`Error uploading ${file.name}: ${error.message}`, 'error');
+            }
+        }
+
+        this.displayPreviewAttachments();
+
+        if (uploadedCount > 0) {
+            this.showStatus(`Uploaded ${uploadedCount} files to preview`, 'success');
+        }
+
+        // Clear file input
+        fileInput.value = '';
+    }
+
+    async addPreviewAttachment(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+
+            reader.onload = (e) => {
+                try {
+                    const fileData = {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        data: e.target.result, // Base64 data URL
+                        uploadedAt: new Date().toISOString()
+                    };
+
+                    // Add to both preview attachments and main attachments
+                    this.currentPreviewAttachments.set(file.name, fileData);
+                    this.attachments.set(file.name, fileData);
+
+                    // Refresh the main attachments display and dropdown
+                    this.displayAttachments();
+                    this.populateAttachmentsDropdown();
+
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                }
+            };
+
+            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.readAsDataURL(file);
+        });
+    }
+
+    displayPreviewAttachments() {
+        const container = document.getElementById('previewAttachmentsList');
+        container.innerHTML = '';
+
+        if (this.currentPreviewAttachments.size === 0) {
+            container.innerHTML = '<p style="color: #666; font-style: italic; margin: 0;">No attachments</p>';
+            return;
+        }
+
+        for (const [filename, fileData] of this.currentPreviewAttachments) {
+            const item = document.createElement('div');
+            item.className = 'preview-attachment-item';
+
+            const icon = this.getFileIcon(filename);
+            const sizeFormatted = this.formatFileSize(fileData.size);
+
+            item.innerHTML = `
+                <div class="preview-attachment-icon">${icon}</div>
+                <div class="preview-attachment-info">
+                    <div class="preview-attachment-name">${this.escapeHtml(filename)}</div>
+                    <div class="preview-attachment-details">${sizeFormatted} • ${fileData.type || 'Unknown type'}</div>
+                </div>
+                <div class="preview-attachment-actions">
+                    <button class="btn-small" onclick="removePreviewAttachment('${filename}')" title="Remove">🗑️</button>
+                </div>
+            `;
+
+            container.appendChild(item);
+        }
+    }
+
+    removePreviewAttachment(filename) {
+        if (this.currentPreviewAttachments.has(filename)) {
+            this.currentPreviewAttachments.delete(filename);
+            this.displayPreviewAttachments();
+            this.showStatus(`Removed ${filename} from preview`, 'success');
+        }
     }
 
     navigateEmail(direction) {
@@ -298,7 +553,7 @@ class EnvialiteApp {
         }
     }
 
-    getAttachmentsForEmail(recipient) {
+    getAttachmentsForEmail(recipient, emailIndex = null) {
         const attachments = [];
 
         // Get consistent attachments (selected in dropdown)
@@ -311,7 +566,8 @@ class EnvialiteApp {
                     attachments.push({
                         filename: option.value,
                         size: fileData.size,
-                        type: fileData.type
+                        type: fileData.type,
+                        data: fileData.data // Include the base64 data
                     });
                 }
             }
@@ -321,6 +577,23 @@ class EnvialiteApp {
         if (this.variableAttachments) {
             const varAttachments = this.getVariableAttachmentsForEmail(recipient);
             attachments.push(...varAttachments);
+        }
+
+        // If we have preview data and a specific email index, include preview-specific attachments
+        if (emailIndex !== null && this.emailPreviews[emailIndex]) {
+            const previewAttachments = this.emailPreviews[emailIndex].attachments || [];
+            previewAttachments.forEach(att => {
+                // Only include if not already in the attachments list
+                const alreadyExists = attachments.some(existing => existing.filename === att.filename);
+                if (!alreadyExists && att.data) {
+                    attachments.push({
+                        filename: att.filename,
+                        size: att.size,
+                        type: att.type,
+                        data: att.data
+                    });
+                }
+            });
         }
 
         return attachments;
@@ -368,28 +641,163 @@ class EnvialiteApp {
 
     async sendEmails() {
         try {
-            this.getFormData();
+            // Check if we have preview data (user has used preview mode)
+            if (this.emailPreviews.length > 0) {
+                // Use preview data for sending
+                this.sendFromPreviewData();
+            } else {
+                // Use traditional form data
+                this.getFormData();
 
-            if (!this.fromEmail) {
-                this.showStatus('Please enter your email address', 'error');
-                return;
+                if (!this.fromEmail) {
+                    this.showStatus('Please enter your email address', 'error');
+                    return;
+                }
+
+                this.parseCSV();
+
+                if (this.recipients.length === 0) {
+                    this.showStatus('No valid recipients to send to', 'error');
+                    return;
+                }
+
+                this.sendEmailsTraditional();
             }
 
-            this.parseCSV();
+        } catch (error) {
+            this.setLoading(false);
+            this.showStatus(`Error sending emails: ${error.message}`, 'error');
+        }
+    }
 
+    async sendFromPreviewData() {
+        try {
+            this.setLoading(true);
+
+            // Get SMTP settings
+            this.getSmtpSettings();
+
+            // Validate we have recipients
             if (this.recipients.length === 0) {
                 this.showStatus('No valid recipients to send to', 'error');
                 return;
             }
 
-            // Add loading state
+            // Check if any preview emails have empty From addresses
+            const emailsWithoutFrom = this.emailPreviews.filter(preview => !preview.from);
+            if (emailsWithoutFrom.length > 0) {
+                this.showStatus(`Some emails are missing From address. Please check preview and ensure all emails have valid sender addresses.`, 'error');
+                return;
+            }
+
+            // Create individual email data for each recipient with their specific attachments
+            const emailsData = this.emailPreviews.map((preview, index) => {
+                // Get attachments specifically for this email
+                const emailAttachments = this.getAttachmentsForEmail(preview.recipient, index);
+
+                console.log(`DEBUG: Email ${index + 1} - Available attachments: [${Array.from(this.attachments.keys())}], Final attachments: ${emailAttachments.length}`);
+
+                return {
+                    to: preview.to,
+                    from: preview.from,
+                    cc: preview.cc,
+                    bcc: preview.bcc,
+                    subject: preview.subject,
+                    body: preview.body,
+                    attachments: emailAttachments
+                };
+            });
+
+            // Use the first email's data as template for server compatibility
+            const firstEmail = this.emailPreviews[0];
+            const template = firstEmail.body || this.emailBody || '';
+            const subject = firstEmail.subject || this.emailSubject || '';
+            const fromEmail = firstEmail.from || this.fromEmail || '';
+
+            // Debug logging
+            console.log('DEBUG: Sending emails from preview data:', {
+                recipientsCount: this.recipients.length,
+                previewCount: this.emailPreviews.length,
+                templateLength: template.length,
+                fromEmail: fromEmail,
+                subject: subject,
+                hasAttachments: this.attachments.size > 0,
+                attachments: Array.from(this.attachments.keys()),
+                smtpServer: this.smtpServer,
+                smtpPort: this.smtpPort,
+                smtpUser: this.smtpUser
+            });
+
+            // Prepare attachments data - ensure all attachments are properly formatted
+            const attachmentsData = {};
+            for (const [filename, fileData] of this.attachments) {
+                attachmentsData[filename] = {
+                    name: fileData.name,
+                    type: fileData.type,
+                    size: fileData.size,
+                    data: fileData.data, // Base64 data URL
+                    uploadedAt: fileData.uploadedAt
+                };
+            }
+
+            const response = await fetch('/send-emails', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    emails: emailsData, // Send individual email data with specific attachments
+                    csvData: this.csvData,
+                    attachments: attachmentsData,
+                    // Include SMTP settings
+                    smtpServer: this.smtpServer,
+                    smtpPort: this.smtpPort,
+                    smtpUser: this.smtpUser,
+                    smtpPassword: this.smtpPassword
+                })
+            });
+
+            let result;
+            try {
+                const responseText = await response.text();
+                result = JSON.parse(responseText);
+            } catch (parseError) {
+                console.error('JSON parse error:', parseError);
+                this.setLoading(false);
+                this.showStatus(`Server error: Invalid JSON response`, 'error');
+                return;
+            }
+
+            this.setLoading(false);
+
+            if (result.success) {
+                this.displayResults(result.results, result.summary);
+                this.showStatus(result.summary, 'success');
+            } else {
+                this.showStatus(result.error, 'error');
+            }
+
+        } catch (error) {
+            this.setLoading(false);
+            this.showStatus(`Error sending emails: ${error.message}`, 'error');
+        }
+    }
+
+    createModifiedCSVForSending() {
+        // For now, return the original CSV data
+        // The server expects the traditional format where it processes the CSV itself
+        return this.csvData;
+    }
+
+    async sendEmailsTraditional() {
+        try {
             this.setLoading(true);
 
             // Get SMTP settings before sending
             this.getSmtpSettings();
 
             // Debug logging for email sending
-            console.log('Sending emails with data:', {
+            console.log('Sending emails with traditional data:', {
                 recipientsCount: this.recipients.length,
                 fromEmail: this.fromEmail,
                 hasAttachments: this.attachments.size > 0,
@@ -902,6 +1310,497 @@ class EnvialiteApp {
 
         return attachments;
     }
+
+    // Table Editor Methods
+    initializeTableEditor() {
+        this.setupTableEventListeners();
+        this.updateTableFromCSV();
+    }
+
+    setupTableEventListeners() {
+        const table = document.getElementById('dataTable');
+        if (!table) return;
+
+        // Cell editing
+        table.addEventListener('click', (e) => {
+            if (e.target.classList.contains('data-cell') || e.target.classList.contains('header-cell')) {
+                this.editCell(e.target);
+            }
+        });
+
+        // Keyboard navigation
+        table.addEventListener('keydown', (e) => {
+            this.handleTableKeydown(e);
+        });
+
+        // Cell editing finish
+        table.addEventListener('blur', (e) => {
+            if (e.target.classList.contains('data-cell') || e.target.classList.contains('header-cell')) {
+                this.finishCellEditing(e.target);
+            }
+        }, true);
+    }
+
+    editCell(cell) {
+        // Remove editing state from other cells
+        const table = document.getElementById('dataTable');
+        const editingCells = table.querySelectorAll('.data-cell.editing, .header-cell.editing');
+        editingCells.forEach(c => {
+            c.classList.remove('editing');
+            this.finishCellEditing(c);
+        });
+
+        // Add editing state to current cell
+        cell.classList.add('editing');
+        cell.focus();
+
+        // Select all text if it's a header cell
+        if (cell.classList.contains('header-cell')) {
+            const selection = window.getSelection();
+            const range = document.createRange();
+            range.selectNodeContents(cell);
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
+    }
+
+    finishCellEditing(cell) {
+        cell.classList.remove('editing');
+        this.updateCSVFromTable();
+        this.saveData();
+    }
+
+    handleTableKeydown(e) {
+        if (!e.target.classList.contains('data-cell') && !e.target.classList.contains('header-cell')) {
+            return;
+        }
+
+        const cell = e.target;
+        const table = document.getElementById('dataTable');
+        let row = cell.closest('tr');
+        let cellIndex = Array.from(row.cells).indexOf(cell);
+
+        switch (e.key) {
+            case 'Tab':
+                e.preventDefault();
+                this.moveToNextCell(cell, e.shiftKey ? -1 : 1);
+                break;
+            case 'Enter':
+                e.preventDefault();
+                if (cell.classList.contains('header-cell')) {
+                    this.moveToNextRow(cell);
+                } else {
+                    this.moveToNextCell(cell, 1);
+                }
+                break;
+            case 'ArrowUp':
+                e.preventDefault();
+                this.moveToAdjacentCell(cell, -1, 'row');
+                break;
+            case 'ArrowDown':
+                e.preventDefault();
+                this.moveToAdjacentCell(cell, 1, 'row');
+                break;
+            case 'ArrowLeft':
+                e.preventDefault();
+                this.moveToAdjacentCell(cell, -1, 'cell');
+                break;
+            case 'ArrowRight':
+                e.preventDefault();
+                this.moveToAdjacentCell(cell, 1, 'cell');
+                break;
+            case 'Escape':
+                cell.classList.remove('editing');
+                cell.blur();
+                break;
+        }
+    }
+
+    moveToNextCell(currentCell, direction) {
+        const table = document.getElementById('dataTable');
+        const cells = Array.from(table.querySelectorAll('.data-cell, .header-cell'));
+        const currentIndex = cells.indexOf(currentCell);
+        const nextIndex = currentIndex + direction;
+
+        if (nextIndex >= 0 && nextIndex < cells.length) {
+            this.editCell(cells[nextIndex]);
+        }
+    }
+
+    moveToAdjacentCell(currentCell, direction, type) {
+        const row = currentCell.closest('tr');
+        const cells = Array.from(row.cells);
+        const cellIndex = cells.indexOf(currentCell);
+
+        if (type === 'row') {
+            const tbody = row.closest('tbody');
+            const rows = Array.from(tbody.rows);
+            const rowIndex = rows.indexOf(row);
+            const newRowIndex = rowIndex + direction;
+
+            if (newRowIndex >= 0 && newRowIndex < rows.length) {
+                const newCell = rows[newRowIndex].cells[cellIndex];
+                if (newCell) {
+                    this.editCell(newCell);
+                }
+            }
+        } else {
+            const newCellIndex = cellIndex + direction;
+            if (newCellIndex >= 0 && newCellIndex < cells.length) {
+                this.editCell(cells[newCellIndex]);
+            }
+        }
+    }
+
+    moveToNextRow(currentCell) {
+        const tbody = currentCell.closest('tbody');
+        const rows = Array.from(tbody.rows);
+        const rowIndex = rows.indexOf(currentCell.closest('tr'));
+        const nextRowIndex = rowIndex + 1;
+
+        if (nextRowIndex < rows.length) {
+            const nextCell = rows[nextRowIndex].cells[0];
+            if (nextCell) {
+                this.editCell(nextCell);
+            }
+        }
+    }
+
+    addRow() {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+        const headerRow = table.querySelector('thead tr');
+        const headerCount = headerRow.cells.length;
+
+        // Create new row
+        const newRow = document.createElement('tr');
+
+        for (let i = 0; i < headerCount; i++) {
+            const newCell = document.createElement('td');
+            newCell.className = 'data-cell';
+            newCell.contentEditable = 'true';
+            newCell.dataset.row = tbody.rows.length;
+            newCell.dataset.column = i;
+            newCell.innerHTML = '<div class="cell-content"><span class="cell-text"></span><button class="delete-row-btn" onclick="deleteRowByIndex(' + tbody.rows.length + ')" title="Delete Row">×</button></div>';
+            newRow.appendChild(newCell);
+        }
+
+        tbody.appendChild(newRow);
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Row added', 'success');
+    }
+
+    removeRow() {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+
+        if (tbody.rows.length <= 1) {
+            this.showStatus('Cannot remove the last data row', 'error');
+            return;
+        }
+
+        tbody.deleteRow(-1);
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Row removed', 'success');
+    }
+
+    addColumn() {
+        const table = document.getElementById('dataTable');
+        const headerRow = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+        const columnIndex = headerRow.cells.length;
+
+        // Add header cell
+        const headerCell = document.createElement('th');
+        headerCell.className = 'header-cell';
+        headerCell.contentEditable = 'true';
+        headerCell.dataset.column = columnIndex;
+        headerCell.innerHTML = `<div class="header-content"><span class="header-text">Column ${columnIndex + 1}</span><button class="delete-column-btn" onclick="deleteColumnByIndex(${columnIndex})" title="Delete Column">×</button></div>`;
+        headerRow.appendChild(headerCell);
+
+        // Add data cells to each row
+        Array.from(tbody.rows).forEach((row, rowIndex) => {
+            const dataCell = document.createElement('td');
+            dataCell.className = 'data-cell';
+            dataCell.contentEditable = 'true';
+            dataCell.dataset.row = rowIndex;
+            dataCell.dataset.column = columnIndex;
+            dataCell.textContent = '';
+            row.appendChild(dataCell);
+        });
+
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Column added', 'success');
+    }
+
+    removeColumn() {
+        const table = document.getElementById('dataTable');
+        const headerRow = table.querySelector('thead tr');
+
+        if (headerRow.cells.length <= 1) {
+            this.showStatus('Cannot remove the last column', 'error');
+            return;
+        }
+
+        // Remove last column from header
+        headerRow.deleteCell(-1);
+
+        // Remove last column from all data rows
+        const tbody = table.querySelector('tbody');
+        Array.from(tbody.rows).forEach(row => {
+            row.deleteCell(-1);
+        });
+
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Column removed', 'success');
+    }
+
+    async pasteFromClipboard() {
+        try {
+            const text = await navigator.clipboard.readText();
+            this.parsePastedData(text);
+        } catch (error) {
+            this.showStatus('Failed to read clipboard. Please use Ctrl+V to paste.', 'error');
+        }
+    }
+
+    parsePastedData(text) {
+        // Try to detect delimiter (tab, comma, semicolon)
+        let delimiter = '\t'; // Default to tab
+        let rows = text.trim().split('\n');
+
+        if (rows.length > 0) {
+            const firstRow = rows[0];
+
+            // Detect delimiter by counting occurrences
+            const tabCount = (firstRow.match(/\t/g) || []).length;
+            const commaCount = (firstRow.match(/,/g) || []).length;
+            const semicolonCount = (firstRow.match(/;/g) || []).length;
+
+            if (commaCount > tabCount && commaCount > semicolonCount) {
+                delimiter = ',';
+            } else if (semicolonCount > tabCount && semicolonCount > commaCount) {
+                delimiter = ';';
+            }
+        }
+
+        // Parse rows
+        const dataRows = rows.map(row => row.split(delimiter).map(cell => cell.trim()));
+
+        if (dataRows.length === 0) {
+            this.showStatus('No data to paste', 'error');
+            return;
+        }
+
+        this.populateTableFromArray(dataRows);
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus(`Pasted ${dataRows.length} rows and ${dataRows[0].length} columns`, 'success');
+    }
+
+    populateTableFromArray(dataArray) {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+        const headerRow = table.querySelector('thead tr');
+
+        // Clear existing data
+        tbody.innerHTML = '';
+        headerRow.innerHTML = '';
+
+        if (dataArray.length === 0) return;
+
+        // First row becomes headers
+        const headers = dataArray[0];
+        headers.forEach((header, index) => {
+            const headerCell = document.createElement('th');
+            headerCell.className = 'header-cell';
+            headerCell.contentEditable = 'true';
+            headerCell.dataset.column = index;
+            headerCell.innerHTML = `<div class="header-content"><span class="header-text">${header || `Column ${index + 1}`}</span><button class="delete-column-btn" onclick="deleteColumnByIndex(${index})" title="Delete Column">×</button></div>`;
+            headerRow.appendChild(headerCell);
+        });
+
+        // Remaining rows become data
+        for (let i = 1; i < dataArray.length; i++) {
+            const row = document.createElement('tr');
+            const rowData = dataArray[i];
+
+            for (let j = 0; j < headers.length; j++) {
+                const cell = document.createElement('td');
+                cell.className = 'data-cell';
+                cell.contentEditable = 'true';
+                cell.dataset.row = i - 1;
+                cell.dataset.column = j;
+                cell.innerHTML = `<div class="cell-content"><span class="cell-text">${rowData[j] || ''}</span><button class="delete-row-btn" onclick="deleteRowByIndex(${i - 1})" title="Delete Row">×</button></div>`;
+                row.appendChild(cell);
+            }
+
+            tbody.appendChild(row);
+        }
+    }
+
+    updateTableFromCSV() {
+        if (!this.csvData || this.csvData.trim() === '') {
+            return;
+        }
+
+        try {
+            const rows = this.csvData.trim().split('\n').filter(row => row.trim());
+            if (rows.length === 0) return;
+
+            const dataRows = rows.map(row => row.split(',').map(cell => cell.trim()));
+            this.populateTableFromArray(dataRows);
+        } catch (error) {
+            console.error('Error updating table from CSV:', error);
+        }
+    }
+
+    updateCSVFromTable() {
+        const table = document.getElementById('dataTable');
+        if (!table) return;
+
+        const headerRow = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+
+        // Extract only the header text, not the button text
+        const headers = Array.from(headerRow.cells).map(cell => {
+            const headerTextSpan = cell.querySelector('.header-text');
+            return headerTextSpan ? headerTextSpan.textContent.trim() : cell.textContent.trim();
+        });
+
+        const rows = [];
+
+        // Add headers as first row
+        rows.push(headers.join(','));
+
+        // Add data rows
+        Array.from(tbody.rows).forEach(row => {
+            const rowData = Array.from(row.cells).map(cell => {
+                const cellTextSpan = cell.querySelector('.cell-text');
+                return cellTextSpan ? cellTextSpan.textContent.trim() : cell.textContent.trim();
+            });
+            rows.push(rowData.join(','));
+        });
+
+        this.csvData = rows.join('\n');
+        document.getElementById('csvData').value = this.csvData;
+    }
+
+    exportToCSV() {
+        this.updateCSVFromTable();
+
+        const blob = new Blob([this.csvData], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'data-source.csv';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+
+        this.showStatus('CSV file exported', 'success');
+    }
+
+    clearTable() {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+        const headerRow = table.querySelector('thead tr');
+
+        // Keep one header and one data row
+        headerRow.innerHTML = '<th contenteditable="true" data-column="0" class="header-cell"><div class="header-content"><span class="header-text">Column 1</span><button class="delete-column-btn" onclick="deleteColumnByIndex(0)" title="Delete Column">×</button></div></th>';
+        tbody.innerHTML = '<tr><td contenteditable="true" data-row="0" data-column="0" class="data-cell"><div class="cell-content"><span class="cell-text"></span><button class="delete-row-btn" onclick="deleteRowByIndex(0)" title="Delete Row">×</button></div></td></tr>';
+
+        this.csvData = '';
+        document.getElementById('csvData').value = '';
+        this.saveData();
+        this.showStatus('Table cleared', 'success');
+    }
+
+    deleteColumnByIndex(columnIndex) {
+        const table = document.getElementById('dataTable');
+        const headerRow = table.querySelector('thead tr');
+        const tbody = table.querySelector('tbody');
+
+        // Check if this is the last column
+        if (headerRow.cells.length <= 1) {
+            this.showStatus('Cannot delete the last column', 'error');
+            return;
+        }
+
+        // Remove header cell
+        headerRow.deleteCell(columnIndex);
+
+        // Remove corresponding cells from all data rows
+        Array.from(tbody.rows).forEach(row => {
+            if (row.cells[columnIndex]) {
+                row.deleteCell(columnIndex);
+            }
+        });
+
+        // Update data-column attributes for remaining cells
+        this.updateCellAttributes();
+
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Column deleted', 'success');
+    }
+
+    deleteRowByIndex(rowIndex) {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+
+        // Check if this is the last row
+        if (tbody.rows.length <= 1) {
+            this.showStatus('Cannot delete the last row', 'error');
+            return;
+        }
+
+        // Remove the row
+        tbody.deleteRow(rowIndex);
+
+        // Update data-row attributes for remaining rows
+        this.updateRowAttributes();
+
+        this.updateCSVFromTable();
+        this.saveData();
+        this.showStatus('Row deleted', 'success');
+    }
+
+    updateCellAttributes() {
+        const table = document.getElementById('dataTable');
+        const headerRow = table.querySelector('thead tr');
+
+        // Update header cell column attributes
+        Array.from(headerRow.cells).forEach((cell, index) => {
+            cell.dataset.column = index;
+        });
+
+        // Update data cell column attributes
+        const tbody = table.querySelector('tbody');
+        Array.from(tbody.rows).forEach((row, rowIndex) => {
+            Array.from(row.cells).forEach((cell, cellIndex) => {
+                cell.dataset.row = rowIndex;
+                cell.dataset.column = cellIndex;
+            });
+        });
+    }
+
+    updateRowAttributes() {
+        const table = document.getElementById('dataTable');
+        const tbody = table.querySelector('tbody');
+
+        // Update row attributes
+        Array.from(tbody.rows).forEach((row, index) => {
+            Array.from(row.cells).forEach(cell => {
+                cell.dataset.row = index;
+            });
+        });
+    }
 }
 
 // Initialize the app when DOM is loaded
@@ -968,4 +1867,62 @@ function testSmtpConnection() {
 
 function navigateEmail(direction) {
     window.envialiteApp.navigateEmail(direction);
+}
+
+// Table Editor Global Functions
+function addRow() {
+    window.envialiteApp.addRow();
+}
+
+function removeRow() {
+    window.envialiteApp.removeRow();
+}
+
+function addColumn() {
+    window.envialiteApp.addColumn();
+}
+
+function removeColumn() {
+    window.envialiteApp.removeColumn();
+}
+
+function pasteFromClipboard() {
+    window.envialiteApp.pasteFromClipboard();
+}
+
+function exportToCSV() {
+    window.envialiteApp.exportToCSV();
+}
+
+function clearTable() {
+    window.envialiteApp.clearTable();
+}
+
+function deleteColumnByIndex(columnIndex) {
+    window.envialiteApp.deleteColumnByIndex(columnIndex);
+}
+
+function deleteRowByIndex(rowIndex) {
+    window.envialiteApp.deleteRowByIndex(rowIndex);
+}
+
+// Preview Editor Global Functions
+function savePreviewChanges() {
+    window.envialiteApp.savePreviewChanges();
+}
+
+function resetPreviewToOriginal() {
+    window.envialiteApp.resetPreviewToOriginal();
+}
+
+function uploadPreviewFiles() {
+    window.envialiteApp.uploadPreviewFiles();
+}
+
+function removePreviewAttachment(filename) {
+    window.envialiteApp.removePreviewAttachment(filename);
+}
+
+function refreshPreviewVariables() {
+    window.envialiteApp.refreshPreviewVariables();
 }

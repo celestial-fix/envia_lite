@@ -152,19 +152,65 @@ Your Company"></textarea>
 
         <div id="data" class="tab-card">
             <div class="card-header">
-                <h2>📊 CSV Data</h2>
+                <h2>📊 Data Source</h2>
             </div>
             <div class="card-content">
-                <div class="form-group">
-                    <label for="csvData">CSV Data (flexible columns):</label>
-                    <textarea id="csvData" rows="12" placeholder="name,email,product,timeframe
-John Doe,john@example.com,Product A,24 hours
-Jane Smith,jane@example.com,Product B,48 hours
+                <!-- Table Editor Controls -->
+                <div class="table-controls">
+                    <div class="control-group">
+                        <button onclick="addRow()" class="btn-small" title="Add Row">➕ Row</button>
+                        <button onclick="removeRow()" class="btn-small" title="Remove Row">➖ Row</button>
+                        <button onclick="addColumn()" class="btn-small" title="Add Column">➕ Column</button>
+                        <button onclick="removeColumn()" class="btn-small" title="Remove Column">➖ Column</button>
+                    </div>
+                    <div class="control-group">
+                        <button onclick="pasteFromClipboard()" class="btn-small" title="Paste from Clipboard">📋 Paste</button>
+                        <button onclick="exportToCSV()" class="btn-small" title="Export to CSV">📤 Export</button>
+                        <button onclick="clearTable()" class="btn-small btn-delete" title="Clear Table">🗑️ Clear</button>
+                    </div>
+                </div>
 
-Or without email column:
-name,product,price
-John Doe,Product A,$19.99
-Jane Smith,Product B,$24.99"></textarea>
+                <!-- Table Editor -->
+                <div class="table-editor-container">
+                    <div class="table-wrapper">
+                        <table id="dataTable" class="data-table">
+                            <thead>
+                                <tr>
+                                    <th contenteditable="true" data-column="0" class="header-cell">
+                                        <div class="header-content">
+                                            <span class="header-text">Column 1</span>
+                                            <button class="delete-column-btn" onclick="deleteColumnByIndex(0)" title="Delete Column">×</button>
+                                        </div>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td contenteditable="true" data-row="0" data-column="0" class="data-cell">
+                                        <div class="cell-content">
+                                            <span class="cell-text"></span>
+                                            <button class="delete-row-btn" onclick="deleteRowByIndex(0)" title="Delete Row">×</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Hidden CSV Data for backward compatibility -->
+                <textarea id="csvData" style="display: none;"></textarea>
+
+                <!-- Table Editor Help -->
+                <div class="table-help">
+                    <h3>💡 Table Editor Tips</h3>
+                    <ul>
+                        <li>Click on any cell to edit its content</li>
+                        <li>Click on column headers to rename them</li>
+                        <li>Use Tab or arrow keys to navigate between cells</li>
+                        <li>Paste Excel/CSV data directly into the table</li>
+                        <li>Scroll horizontally and vertically for large tables</li>
+                    </ul>
                 </div>
             </div>
         </div>
@@ -204,13 +250,75 @@ Jane Smith,Product B,$24.99"></textarea>
                 </div>
 
                 <div class="preview-section" id="previewSection" style="display: none;">
-                    <h3>📬 Email Preview</h3>
+                    <h3>📬 Email Preview & Edit</h3>
                     <div class="preview-navigation">
                         <button id="prevEmail" onclick="navigateEmail(-1)" disabled>⬅️ Previous</button>
                         <span id="emailCounter">Email 1 of 1</span>
                         <button id="nextEmail" onclick="navigateEmail(1)" disabled>➡️ Next</button>
                     </div>
-                    <div id="previewContent"></div>
+
+                    <!-- Editable Email Preview -->
+                    <div class="editable-email-preview" id="previewContent">
+                        <div class="preview-actions">
+                            <button onclick="savePreviewChanges()" class="btn-small">💾 Save Changes</button>
+                            <button onclick="resetPreviewToOriginal()" class="btn-small btn-delete">↩️ Reset</button>
+                            <button onclick="refreshPreviewVariables()" class="btn-small">🔄 Refresh Variables</button>
+                            <button onclick="addPreviewAttachment()" class="btn-small">📎 Add Attachment</button>
+                        </div>
+
+                        <div class="preview-form">
+                            <!-- Email Headers (Editable) -->
+                            <div class="preview-field-group">
+                                <label>From:</label>
+                                <input type="email" id="previewFrom" class="preview-input" />
+                            </div>
+
+                            <div class="preview-field-group">
+                                <label>To:</label>
+                                <input type="email" id="previewTo" class="preview-input" />
+                            </div>
+
+                            <div class="preview-field-group">
+                                <label>CC:</label>
+                                <input type="email" id="previewCc" class="preview-input" />
+                            </div>
+
+                            <div class="preview-field-group">
+                                <label>BCC:</label>
+                                <input type="email" id="previewBcc" class="preview-input" />
+                            </div>
+
+                            <div class="preview-field-group">
+                                <label>Subject:</label>
+                                <input type="text" id="previewSubject" class="preview-input" />
+                            </div>
+
+                            <!-- Message Body (Editable) -->
+                            <div class="preview-field-group">
+                                <label>Message:</label>
+                                <textarea id="previewBody" class="preview-textarea" rows="12"></textarea>
+                            </div>
+
+                            <!-- Attachments Section -->
+                            <div class="preview-attachments-section">
+                                <label>Attachments:</label>
+                                <div class="preview-attachments-list" id="previewAttachmentsList">
+                                    <!-- Attachments will be populated here -->
+                                </div>
+                                <div class="preview-attachment-controls">
+                                    <input type="file" id="previewFileUpload" multiple />
+                                    <button onclick="uploadPreviewFiles()" class="btn-small">📤 Upload Files</button>
+                                </div>
+                                <div class="preview-attachment-picker">
+                                    <label for="previewAttachmentPicker">Add from available:</label>
+                                    <select id="previewAttachmentPicker" onchange="addAttachmentFromPicker()">
+                                        <option value="">Select attachment to add...</option>
+                                        <!-- Available attachments will be populated here -->
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="results-section" id="resultsSection" style="display: none;">
