@@ -26,6 +26,10 @@ class EnvialiteApp {
         this.smtpUser = '';
         this.smtpPassword = '';
 
+        // SMTP connection status
+        this.smtpConnectionTested = false;
+        this.smtpConnectionValid = false;
+
         // Preview navigation
         this.currentEmailIndex = 0;
         this.emailPreviews = []; // Store all generated email previews
@@ -743,16 +747,21 @@ class EnvialiteApp {
                 // Only include if not already in the attachments list
                 const alreadyExists = attachments.some(existing => existing.filename === att.filename);
                 console.log(`Checking preview attachment ${att.filename}: already exists = ${alreadyExists}, has data = ${!!att.data}, data type = ${typeof att.data}`);
-                if (!alreadyExists && att.data) {
-                    attachments.push({
-                        filename: att.filename,
-                        size: att.size,
-                        type: att.type,
-                        data: att.data
-                    });
-                    console.log('Added preview-specific attachment:', att.filename);
-                } else if (!att.data) {
-                    console.error('Preview attachment missing data:', att);
+
+                if (!alreadyExists) {
+                    // Get the full attachment data from the main attachments map
+                    const fullAttachmentData = this.attachments.get(att.filename);
+                    if (fullAttachmentData && fullAttachmentData.data) {
+                        attachments.push({
+                            filename: att.filename,
+                            size: fullAttachmentData.size,
+                            type: fullAttachmentData.type,
+                            data: fullAttachmentData.data
+                        });
+                        console.log('Added preview-specific attachment:', att.filename);
+                    } else {
+                        console.error('Preview attachment missing data from main attachments:', att.filename);
+                    }
                 }
             });
         } else {
@@ -805,6 +814,11 @@ class EnvialiteApp {
 
     async sendEmails() {
         try {
+            // Validate SMTP settings before proceeding
+            if (!this.validateSmtpSettings()) {
+                return;
+            }
+
             // Check if we have preview data (user has used preview mode)
             if (this.emailPreviews.length > 0) {
                 // Use preview data for sending
@@ -1211,17 +1225,66 @@ class EnvialiteApp {
             }
 
             if (result.success) {
+                // Update connection status flags
+                this.smtpConnectionTested = true;
+                this.smtpConnectionValid = true;
+
                 testResult.innerHTML = '<span style="color: #28a745;">✅ Connection successful!</span>';
                 this.showStatus('SMTP connection test passed', 'success');
             } else {
+                // Mark as tested but invalid
+                this.smtpConnectionTested = true;
+                this.smtpConnectionValid = false;
+
                 testResult.innerHTML = '<span style="color: #dc3545;">❌ Connection failed</span>';
                 this.showStatus(`SMTP test failed: ${result.error}`, 'error');
             }
 
         } catch (error) {
+            // Mark as tested but invalid on error
+            this.smtpConnectionTested = true;
+            this.smtpConnectionValid = false;
+
             document.getElementById('smtpTestResult').innerHTML = '<span style="color: #dc3545;">❌ Test failed</span>';
             this.showStatus(`SMTP test error: ${error.message}`, 'error');
         }
+    }
+
+    validateSmtpSettings() {
+        // Get current SMTP settings
+        const smtpServerField = document.getElementById('smtpServer');
+        const smtpUserField = document.getElementById('smtpUser');
+        const smtpPasswordField = document.getElementById('smtpPassword');
+
+        const smtpServer = smtpServerField ? smtpServerField.value.trim() : '';
+        const smtpUser = smtpUserField ? smtpUserField.value.trim() : '';
+        const smtpPassword = smtpPasswordField ? smtpPasswordField.value.trim() : '';
+
+        // Check if SMTP server is configured
+        if (!smtpServer) {
+            this.showStatus('Please configure SMTP server settings before sending emails. Go to Settings tab and fill in your SMTP details.', 'error');
+            return false;
+        }
+
+        // Check if SMTP username is configured
+        if (!smtpUser) {
+            this.showStatus('Please enter your SMTP username in the Settings tab before sending emails.', 'error');
+            return false;
+        }
+
+        // Check if SMTP password is configured
+        if (!smtpPassword) {
+            this.showStatus('Please enter your SMTP password in the Settings tab before sending emails.', 'error');
+            return false;
+        }
+
+        // Check if SMTP connection has been tested and is valid
+        if (!this.smtpConnectionTested || !this.smtpConnectionValid) {
+            this.showStatus('Please test your SMTP connection first using the "Test Connection" button in the Settings tab before sending emails.', 'error');
+            return false;
+        }
+
+        return true;
     }
 
     getSmtpSettings() {
