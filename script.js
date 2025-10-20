@@ -529,6 +529,7 @@ class EnvialiteApp {
                     }
 
                     const fileData = {
+                        filename: file.name,
                         name: file.name,
                         type: file.type,
                         size: file.size,
@@ -547,6 +548,16 @@ class EnvialiteApp {
                     // Add to both preview attachments and main attachments
                     this.currentPreviewAttachments.set(file.name, fileData);
                     this.attachments.set(file.name, fileData);
+
+                    // Update the current email preview object with the new attachment
+                    const currentPreview = this.emailPreviews[this.currentEmailIndex];
+                    if (currentPreview) {
+                        // Update the preview's attachments array
+                        currentPreview.attachments = Array.from(this.currentPreviewAttachments.values());
+                        console.log('Updated email preview object with attachments:', currentPreview.attachments.length);
+                    } else {
+                        console.error('Current preview not found!');
+                    }
 
                     // Refresh the main attachments display and dropdown
                     this.displayAttachments();
@@ -598,6 +609,14 @@ class EnvialiteApp {
     removePreviewAttachment(filename) {
         if (this.currentPreviewAttachments.has(filename)) {
             this.currentPreviewAttachments.delete(filename);
+
+            // Also update the email preview object
+            const currentPreview = this.emailPreviews[this.currentEmailIndex];
+            if (currentPreview) {
+                currentPreview.attachments = Array.from(this.currentPreviewAttachments.values());
+                console.log('Updated email preview object after removal:', currentPreview.attachments.length);
+            }
+
             this.displayPreviewAttachments();
             this.showStatus(`Removed ${filename} from preview`, 'success');
         }
