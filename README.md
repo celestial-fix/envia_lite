@@ -192,8 +192,11 @@ This is a personal tool - use at your own risk.
 
 ## To-Do
 
-[] - Fix attachments
-[] - Attachments fixing - attaching via file picker in the message preview editor
-[] - Attachments fixing - attaching via file upload in the message preview editor
+[x] - Fix attachments
+[x] - Attachments fixing - attaching via file picker in the message preview editor
+[x] - Attachments fixing - attaching via file upload in the message preview editor
 [] - Add/Fix displaying 'sent' or 'failed' for a message after sending
 [] - Add 'included' or 'excluded for a message before sending, only send included ones
+[] - Add name as separate field for from, being made up of from name and from email, both in template and in email preview and edit
+[] - Clean up interfaces
+[] - Change colours of styling, the blue-purple gradient is not desired

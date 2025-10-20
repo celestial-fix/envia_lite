@@ -69,24 +69,35 @@
                 <!-- Email Headers -->
                 <div class="email-headers">
                     <h3>📧 Email Headers</h3>
+                    <div class="form-group">
+                        <label>From:</label>
+                    </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="fromEmail">From Email:</label>
-                            <input type="email" id="fromEmail" placeholder="your-email@gmail.com" />
+                            <label for="fromName">Name (Optional):</label>
+                            <input type="text" id="fromName" placeholder="Your Display Name" />
                         </div>
                         <div class="form-group">
-                            <label for="toEmail">To Email:</label>
-                            <input type="email" id="toEmail" placeholder="recipient@example.com" />
+                            <label for="fromEmail">Email:</label>
+                            <input type="email" id="fromEmail" placeholder="your-email@gmail.com" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
+                            <label for="toEmail">To Email:</label>
+                            <input type="email" id="toEmail" placeholder="recipient@example.com" />
+                        </div>
+                        <div class="form-group">
                             <label for="ccEmail">CC Email (Optional):</label>
                             <input type="email" id="ccEmail" placeholder="cc@example.com" />
                         </div>
+                    </div>
+                    <div class="form-row">
                         <div class="form-group">
                             <label for="bccEmail">BCC Email (Optional):</label>
                             <input type="email" id="bccEmail" placeholder="bcc@example.com" />
+                        </div>
+                        <div class="form-group">
                         </div>
                     </div>
                     <div class="form-group">
@@ -269,7 +280,16 @@ Your Company"></textarea>
                             <!-- Email Headers (Editable) -->
                             <div class="preview-field-group">
                                 <label>From:</label>
-                                <input type="email" id="previewFrom" class="preview-input" />
+                            </div>
+                            <div class="preview-field-row">
+                                <div class="preview-field-group">
+                                    <label>Name:</label>
+                                    <input type="text" id="previewFromName" class="preview-input" />
+                                </div>
+                                <div class="preview-field-group">
+                                    <label>Email:</label>
+                                    <input type="email" id="previewFrom" class="preview-input" />
+                                </div>
                             </div>
 
                             <div class="preview-field-group">

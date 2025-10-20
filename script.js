@@ -3,6 +3,7 @@
 class EnvialiteApp {
     constructor() {
         // Email composition fields
+        this.fromName = '';
         this.fromEmail = '';
         this.toEmail = '';
         this.ccEmail = '';
@@ -56,7 +57,7 @@ class EnvialiteApp {
         // Auto-save on input changes (debounced)
         let saveTimeout;
         const fieldsToWatch = [
-            'fromEmail', 'toEmail', 'ccEmail', 'bccEmail',
+            'fromName', 'fromEmail', 'toEmail', 'ccEmail', 'bccEmail',
             'emailSubject', 'emailBody', 'csvData'
         ];
 
@@ -74,6 +75,7 @@ class EnvialiteApp {
     saveData() {
         const data = {
             // Email composition data
+            fromName: document.getElementById('fromName').value,
             fromEmail: document.getElementById('fromEmail').value,
             toEmail: document.getElementById('toEmail').value,
             ccEmail: document.getElementById('ccEmail').value,
@@ -102,6 +104,7 @@ class EnvialiteApp {
                 const data = JSON.parse(saved);
 
                 // Load email composition data
+                document.getElementById('fromName').value = data.fromName || '';
                 document.getElementById('fromEmail').value = data.fromEmail || '';
                 document.getElementById('toEmail').value = data.toEmail || '';
                 document.getElementById('ccEmail').value = data.ccEmail || '';
@@ -1130,6 +1133,7 @@ class EnvialiteApp {
 
     getFormData() {
         // Get email composition data
+        this.fromName = document.getElementById('fromName') ? document.getElementById('fromName').value : '';
         this.fromEmail = document.getElementById('fromEmail').value;
         this.toEmail = document.getElementById('toEmail').value;
         this.ccEmail = document.getElementById('ccEmail').value;
