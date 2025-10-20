@@ -189,3 +189,11 @@ To modify the application:
 ## License
 
 This is a personal tool - use at your own risk.
+
+## To-Do
+
+[] - Fix attachments
+[] - Attachments fixing - attaching via file picker in the message preview editor
+[] - Attachments fixing - attaching via file upload in the message preview editor
+[] - Add/Fix displaying 'sent' or 'failed' for a message after sending
+[] - Add 'included' or 'excluded for a message before sending, only send included ones

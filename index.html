@@ -19,7 +19,7 @@
             <button class="tab-btn" onclick="showTab('template')">📝 Template</button>
             <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
             <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
-            <button class="tab-btn" onclick="showTab('preview')">👁️ Preview</button>
+            <button class="tab-btn" onclick="showTab('preview'); previewEmails();">👁️ Preview</button>
         </div>
 
         <!-- Tab Content Cards -->
@@ -243,7 +243,6 @@ Your Company"></textarea>
             </div>
             <div class="card-content">
                 <div class="actions-section">
-                    <button id="previewBtn" onclick="previewEmails()">👁️ Preview Emails</button>
                     <button id="sendBtn" onclick="sendEmails()">🚀 Send Emails</button>
                     <button id="saveBtn" onclick="saveData()">💾 Save Data</button>
                     <button id="loadBtn" onclick="loadData()">📂 Load Data</button>

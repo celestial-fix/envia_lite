@@ -215,6 +215,9 @@ class EnvialiteApp {
     generateEmailPreviews() {
         this.emailPreviews = [];
 
+        // Initialize currentPreviewAttachments as empty Map
+        this.currentPreviewAttachments = new Map();
+
         // Check if SMTP username is a valid email for fallback
         const smtpEmailFallback = this.isValidEmail(this.smtpUser) ? this.smtpUser : null;
         if (this.smtpUser && !smtpEmailFallback) {
@@ -235,7 +238,7 @@ class EnvialiteApp {
                 console.log(`Using SMTP username as From email for recipient ${index + 1}`);
             }
 
-            // Get attachments for this email
+            // Get attachments for this email (without emailIndex to avoid preview-specific logic)
             const emailAttachments = this.getAttachmentsForEmail(recipient);
 
             this.emailPreviews.push({
@@ -263,7 +266,19 @@ class EnvialiteApp {
 
         prevBtn.disabled = this.currentEmailIndex === 0;
         nextBtn.disabled = this.currentEmailIndex === this.emailPreviews.length - 1;
-        emailCounter.textContent = `Email ${this.currentEmailIndex + 1} of ${this.emailPreviews.length}`;
+
+        // Update email counter with status
+        const totalCount = this.emailPreviews.length;
+        let counterText = `Email ${this.currentEmailIndex + 1} of ${totalCount}`;
+
+        // Add status if email was sent
+        if (preview.sendStatus === 'sent') {
+            counterText += ' - ✅ Sent';
+        } else if (preview.sendStatus === 'failed') {
+            counterText += ' - ❌ Failed';
+        }
+
+        emailCounter.textContent = counterText;
 
         // Populate editable fields with merged content (variables replaced)
         this.populateEditablePreview(preview);
@@ -289,6 +304,9 @@ class EnvialiteApp {
         });
 
         this.displayPreviewAttachments();
+
+        // Show status indicator if email was sent
+        this.showEmailStatus(preview);
     }
 
     populateAttachmentPicker() {
@@ -325,10 +343,30 @@ class EnvialiteApp {
 
         // Get the attachment data
         const fileData = this.attachments.get(selectedFilename);
-        if (!fileData) return;
+        if (!fileData) {
+            console.error('Attachment data not found for:', selectedFilename);
+            return;
+        }
+
+        console.log('Adding attachment to email:', {
+            filename: selectedFilename,
+            currentEmailIndex: this.currentEmailIndex,
+            currentPreviewAttachmentsSize: this.currentPreviewAttachments.size,
+            emailPreviewsLength: this.emailPreviews.length
+        });
 
         // Add to current preview attachments
         this.currentPreviewAttachments.set(selectedFilename, fileData);
+
+        // Also update the email preview object with the new attachment
+        const currentPreview = this.emailPreviews[this.currentEmailIndex];
+        if (currentPreview) {
+            // Add the attachment data to the preview object
+            currentPreview.attachments = Array.from(this.currentPreviewAttachments.values());
+            console.log('Updated email preview object with attachments:', currentPreview.attachments.length);
+        } else {
+            console.error('Current preview not found!');
+        }
 
         // Refresh the display
         this.displayPreviewAttachments();
@@ -479,13 +517,28 @@ class EnvialiteApp {
 
             reader.onload = (e) => {
                 try {
+                    const base64Data = e.target.result; // Full data URL like "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAA..."
+
+                    // Validate base64 format
+                    if (!base64Data || !base64Data.includes(',')) {
+                        throw new Error('Invalid file data format');
+                    }
+
                     const fileData = {
                         name: file.name,
                         type: file.type,
                         size: file.size,
-                        data: e.target.result, // Base64 data URL
+                        data: base64Data, // Keep full data URL
                         uploadedAt: new Date().toISOString()
                     };
+
+                    console.log('File data created:', {
+                        name: file.name,
+                        type: file.type,
+                        size: file.size,
+                        dataLength: base64Data.length,
+                        dataPrefix: base64Data.substring(0, 50) + '...'
+                    });
 
                     // Add to both preview attachments and main attachments
                     this.currentPreviewAttachments.set(file.name, fileData);
@@ -497,6 +550,7 @@ class EnvialiteApp {
 
                     resolve();
                 } catch (error) {
+                    console.error('Error processing file:', error);
                     reject(error);
                 }
             };
@@ -553,38 +607,142 @@ class EnvialiteApp {
         }
     }
 
+    storeSendResults(results) {
+        // Match server results with preview objects and store status
+        results.forEach(result => {
+            // Find the corresponding preview by email address and row number
+            const matchingPreview = this.emailPreviews.find(preview =>
+                preview.to === result.email ||
+                preview.recipient._rowNumber === result._rowNumber
+            );
+
+            if (matchingPreview) {
+                matchingPreview.sendStatus = result.success ? 'sent' : 'failed';
+                matchingPreview.sendError = result.error;
+            }
+        });
+    }
+
+    refreshPreviewDisplay() {
+        // Simplified - just update the basic counter
+        const totalCount = this.emailPreviews.length;
+        const emailCounter = document.getElementById('emailCounter');
+        if (emailCounter) {
+            emailCounter.textContent = `Email ${this.currentEmailIndex + 1} of ${totalCount}`;
+        }
+    }
+
+    showEmailStatus(preview) {
+        // Remove existing status indicators
+        const existingStatus = document.querySelector('.email-status-indicator');
+        if (existingStatus) {
+            existingStatus.remove();
+        }
+
+        // Add status indicator if email was sent
+        if (preview.sendStatus) {
+            const statusDiv = document.createElement('div');
+            statusDiv.className = 'email-status-indicator';
+
+            if (preview.sendStatus === 'sent') {
+                statusDiv.innerHTML = `
+                    <div class="status-indicator sent" style="
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: #d4edda;
+                        color: #155724;
+                        border: 1px solid #c3e6cb;
+                        border-radius: 20px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        font-weight: bold;
+                        z-index: 100;
+                    ">
+                        ✅ Sent
+                    </div>
+                `;
+            } else if (preview.sendStatus === 'failed') {
+                statusDiv.innerHTML = `
+                    <div class="status-indicator failed" style="
+                        position: absolute;
+                        top: 10px;
+                        right: 10px;
+                        background: #f8d7da;
+                        color: #721c24;
+                        border: 1px solid #f5c6cb;
+                        border-radius: 20px;
+                        padding: 4px 8px;
+                        font-size: 12px;
+                        font-weight: bold;
+                        z-index: 100;
+                    ">
+                        ❌ Failed
+                    </div>
+                `;
+            }
+
+            // Add to the preview content area
+            const previewContent = document.getElementById('previewContent');
+            if (previewContent) {
+                previewContent.appendChild(statusDiv);
+            }
+        }
+    }
+
     getAttachmentsForEmail(recipient, emailIndex = null) {
         const attachments = [];
+        console.log('=== GETTING ATTACHMENTS FOR EMAIL ===');
+        console.log('Recipient:', recipient);
+        console.log('Email Index:', emailIndex);
+        console.log('Available global attachments:', Array.from(this.attachments.keys()));
+        console.log('Current preview attachments:', Array.from(this.currentPreviewAttachments.keys()));
 
         // Get consistent attachments (selected in dropdown)
         const selectedAttachments = document.getElementById('emailAttachments');
-        for (let i = 0; i < selectedAttachments.options.length; i++) {
-            const option = selectedAttachments.options[i];
-            if (option.selected && option.value) {
-                const fileData = this.attachments.get(option.value);
-                if (fileData) {
-                    attachments.push({
-                        filename: option.value,
-                        size: fileData.size,
-                        type: fileData.type,
-                        data: fileData.data // Include the base64 data
-                    });
+        console.log('Selected attachments dropdown:', selectedAttachments ? selectedAttachments.options.length : 'null');
+
+        if (selectedAttachments) {
+            for (let i = 0; i < selectedAttachments.options.length; i++) {
+                const option = selectedAttachments.options[i];
+                console.log(`Option ${i}:`, { value: option.value, selected: option.selected, text: option.text });
+                if (option.selected && option.value) {
+                    const fileData = this.attachments.get(option.value);
+                    console.log('Found file data for', option.value, ':', !!fileData);
+                    if (fileData) {
+                        attachments.push({
+                            filename: option.value,
+                            size: fileData.size,
+                            type: fileData.type,
+                            data: fileData.data // Include the base64 data
+                        });
+                        console.log('Added consistent attachment:', option.value);
+                    } else {
+                        console.error('File data missing for selected attachment:', option.value);
+                    }
                 }
             }
         }
 
         // Get variable attachments from CSV
         if (this.variableAttachments) {
+            console.log('Getting variable attachments for template:', this.variableAttachments);
             const varAttachments = this.getVariableAttachmentsForEmail(recipient);
+            console.log('Variable attachments found:', varAttachments.length);
             attachments.push(...varAttachments);
+        } else {
+            console.log('No variable attachments template set');
         }
 
         // If we have preview data and a specific email index, include preview-specific attachments
         if (emailIndex !== null && this.emailPreviews[emailIndex]) {
             const previewAttachments = this.emailPreviews[emailIndex].attachments || [];
+            console.log('Preview-specific attachments for email', emailIndex, ':', previewAttachments.length);
+            console.log('Preview attachments data:', previewAttachments.map(att => ({ filename: att.filename, hasData: !!att.data })));
             previewAttachments.forEach(att => {
                 // Only include if not already in the attachments list
                 const alreadyExists = attachments.some(existing => existing.filename === att.filename);
+                console.log(`Checking preview attachment ${att.filename}: already exists = ${alreadyExists}, has data = ${!!att.data}, data type = ${typeof att.data}`);
                 if (!alreadyExists && att.data) {
                     attachments.push({
                         filename: att.filename,
@@ -592,10 +750,16 @@ class EnvialiteApp {
                         type: att.type,
                         data: att.data
                     });
+                    console.log('Added preview-specific attachment:', att.filename);
+                } else if (!att.data) {
+                    console.error('Preview attachment missing data:', att);
                 }
             });
+        } else {
+            console.log('No preview data or email index provided');
         }
 
+        console.log('Final attachments for email:', attachments.length, attachments.map(a => a.filename));
         return attachments;
     }
 
@@ -695,7 +859,8 @@ class EnvialiteApp {
                 // Get attachments specifically for this email
                 const emailAttachments = this.getAttachmentsForEmail(preview.recipient, index);
 
-                console.log(`DEBUG: Email ${index + 1} - Available attachments: [${Array.from(this.attachments.keys())}], Final attachments: ${emailAttachments.length}`);
+                console.log(`DEBUG: Email ${index + 1} - Recipient: ${preview.recipient._rowNumber}, Preview attachments: ${preview.attachments.length}, Final attachments: ${emailAttachments.length}`);
+                console.log(`DEBUG: Email ${index + 1} - Available global attachments: [${Array.from(this.attachments.keys())}]`);
 
                 return {
                     to: preview.to,
@@ -732,7 +897,7 @@ class EnvialiteApp {
             const attachmentsData = {};
             for (const [filename, fileData] of this.attachments) {
                 attachmentsData[filename] = {
-                    name: fileData.name,
+                    filename: fileData.name, // ✅ Backend expects 'filename' property
                     type: fileData.type,
                     size: fileData.size,
                     data: fileData.data, // Base64 data URL
@@ -771,8 +936,13 @@ class EnvialiteApp {
             this.setLoading(false);
 
             if (result.success) {
-                this.displayResults(result.results, result.summary);
+                // Store results in each preview object for status display
+                this.storeSendResults(result.results);
+                this.refreshPreviewDisplay();
                 this.showStatus(result.summary, 'success');
+
+                // Hide results section since we show status in preview
+                document.getElementById('resultsSection').style.display = 'none';
             } else {
                 this.showStatus(result.error, 'error');
             }
@@ -909,17 +1079,14 @@ class EnvialiteApp {
 
     setLoading(loading) {
         const sendBtn = document.getElementById('sendBtn');
-        const previewBtn = document.getElementById('previewBtn');
 
         if (loading) {
             sendBtn.innerHTML = '<span class="spinner"></span>Sending...';
             sendBtn.disabled = true;
-            previewBtn.disabled = true;
             document.body.classList.add('loading');
         } else {
             sendBtn.innerHTML = '🚀 Send Emails';
             sendBtn.disabled = false;
-            previewBtn.disabled = false;
             document.body.classList.remove('loading');
         }
     }
@@ -1211,6 +1378,12 @@ class EnvialiteApp {
     }
 
     getFileIcon(filename) {
+        // Handle case where filename might be undefined
+        if (!filename) {
+            console.error('getFileIcon called with undefined filename');
+            return '📎';
+        }
+
         const ext = filename.split('.').pop().toLowerCase();
         const icons = {
             'pdf': '📄',
@@ -1826,10 +1999,32 @@ function showTab(tabName) {
     const selectedTab = document.getElementById(tabName);
     if (selectedTab) {
         selectedTab.classList.add('active');
+
+        // Auto-generate previews when preview tab is shown
+        if (tabName === 'preview' && window.envialiteApp) {
+            // Only generate if we don't have previews yet or if CSV data has changed
+            if (window.envialiteApp.emailPreviews.length === 0) {
+                try {
+                    window.envialiteApp.getFormData();
+                    window.envialiteApp.parseCSV();
+
+                    if (window.envialiteApp.recipients.length > 0) {
+                        window.envialiteApp.generateEmailPreviews();
+                        window.envialiteApp.currentEmailIndex = 0;
+                        window.envialiteApp.showCurrentEmailPreview();
+                        window.envialiteApp.showStatus(`Preview generated for ${window.envialiteApp.recipients.length} emails`, 'success');
+                    }
+                } catch (error) {
+                    console.error('Auto-preview generation failed:', error);
+                }
+            }
+        }
     }
 
     // Add active class to clicked button
-    event.target.classList.add('active');
+    if (event && event.target) {
+        event.target.classList.add('active');
+    }
 }
 
 // Global functions for HTML onclick handlers
@@ -1867,6 +2062,10 @@ function testSmtpConnection() {
 
 function navigateEmail(direction) {
     window.envialiteApp.navigateEmail(direction);
+}
+
+function addAttachmentFromPicker() {
+    window.envialiteApp.addAttachmentFromPicker();
 }
 
 // Table Editor Global Functions
