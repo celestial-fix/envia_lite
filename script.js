@@ -700,7 +700,6 @@ class EnvialiteApp {
         console.log('Recipient:', recipient);
         console.log('Email Index:', emailIndex);
         console.log('Available global attachments:', Array.from(this.attachments.keys()));
-        console.log('Current preview attachments:', Array.from(this.currentPreviewAttachments.keys()));
 
         // Get consistent attachments (selected in dropdown)
         const selectedAttachments = document.getElementById('emailAttachments');
@@ -713,7 +712,7 @@ class EnvialiteApp {
                 if (option.selected && option.value) {
                     const fileData = this.attachments.get(option.value);
                     console.log('Found file data for', option.value, ':', !!fileData);
-                    if (fileData) {
+                    if (fileData && fileData.data) {
                         attachments.push({
                             filename: option.value,
                             size: fileData.size,
@@ -722,7 +721,7 @@ class EnvialiteApp {
                         });
                         console.log('Added consistent attachment:', option.value);
                     } else {
-                        console.error('File data missing for selected attachment:', option.value);
+                        console.error('File data missing or invalid for selected attachment:', option.value);
                     }
                 }
             }
@@ -733,7 +732,15 @@ class EnvialiteApp {
             console.log('Getting variable attachments for template:', this.variableAttachments);
             const varAttachments = this.getVariableAttachmentsForEmail(recipient);
             console.log('Variable attachments found:', varAttachments.length);
-            attachments.push(...varAttachments);
+
+            // Validate variable attachments before adding
+            varAttachments.forEach(att => {
+                if (att && att.filename && att.data) {
+                    attachments.push(att);
+                } else {
+                    console.error('Invalid variable attachment:', att);
+                }
+            });
         } else {
             console.log('No variable attachments template set');
         }
@@ -742,14 +749,14 @@ class EnvialiteApp {
         if (emailIndex !== null && this.emailPreviews[emailIndex]) {
             const previewAttachments = this.emailPreviews[emailIndex].attachments || [];
             console.log('Preview-specific attachments for email', emailIndex, ':', previewAttachments.length);
-            console.log('Preview attachments data:', previewAttachments.map(att => ({ filename: att.filename, hasData: !!att.data })));
-            previewAttachments.forEach(att => {
-                // Only include if not already in the attachments list
-                const alreadyExists = attachments.some(existing => existing.filename === att.filename);
-                console.log(`Checking preview attachment ${att.filename}: already exists = ${alreadyExists}, has data = ${!!att.data}, data type = ${typeof att.data}`);
 
-                if (!alreadyExists) {
-                    // Get the full attachment data from the main attachments map
+            previewAttachments.forEach(att => {
+                // Only include if not already in the attachments list and has valid data
+                const alreadyExists = attachments.some(existing => existing.filename === att.filename);
+                console.log(`Checking preview attachment ${att.filename}: already exists = ${alreadyExists}, has data = ${!!att.data}`);
+
+                if (!alreadyExists && att.filename && att.data) {
+                    // Get the full attachment data from the main attachments map to ensure consistency
                     const fullAttachmentData = this.attachments.get(att.filename);
                     if (fullAttachmentData && fullAttachmentData.data) {
                         attachments.push({
@@ -762,14 +769,25 @@ class EnvialiteApp {
                     } else {
                         console.error('Preview attachment missing data from main attachments:', att.filename);
                     }
+                } else if (!alreadyExists && !att.data) {
+                    console.error('Preview attachment missing data:', att.filename);
                 }
             });
         } else {
             console.log('No preview data or email index provided');
         }
 
-        console.log('Final attachments for email:', attachments.length, attachments.map(a => a.filename));
-        return attachments;
+        // Final validation - ensure all attachments have required properties
+        const validAttachments = attachments.filter(att => {
+            if (!att || !att.filename || !att.data) {
+                console.error('Invalid attachment structure:', att);
+                return false;
+            }
+            return true;
+        });
+
+        console.log('Final valid attachments for email:', validAttachments.length, validAttachments.map(a => a.filename));
+        return validAttachments;
     }
 
     getVariableAttachmentsForEmail(recipient) {
@@ -799,12 +817,15 @@ class EnvialiteApp {
                     }
                 }
 
-                if (foundAttachment) {
+                if (foundAttachment && foundAttachment.data) {
                     attachments.push({
                         filename: filename,
                         size: foundAttachment.size,
-                        type: foundAttachment.type
+                        type: foundAttachment.type,
+                        data: foundAttachment.data // Include the base64 data
                     });
+                } else {
+                    console.error('Variable attachment missing data:', filename);
                 }
             });
         }
@@ -876,6 +897,20 @@ class EnvialiteApp {
                 console.log(`DEBUG: Email ${index + 1} - Recipient: ${preview.recipient._rowNumber}, Preview attachments: ${preview.attachments.length}, Final attachments: ${emailAttachments.length}`);
                 console.log(`DEBUG: Email ${index + 1} - Available global attachments: [${Array.from(this.attachments.keys())}]`);
 
+                // Validate that all attachments have the required data property
+                const validAttachments = emailAttachments.filter(att => {
+                    if (!att || !att.data) {
+                        console.error(`Email ${index + 1}: Missing attachment data for ${att ? att.filename : 'unknown'}`);
+                        return false;
+                    }
+                    return true;
+                });
+
+                if (validAttachments.length !== emailAttachments.length) {
+                    console.error(`Email ${index + 1}: Some attachments are missing data. Expected ${emailAttachments.length}, got ${validAttachments.length}`);
+                    this.showStatus(`Email ${index + 1}: Some attachments are missing data and will not be sent`, 'error');
+                }
+
                 return {
                     to: preview.to,
                     from: preview.from,
@@ -883,7 +918,7 @@ class EnvialiteApp {
                     bcc: preview.bcc,
                     subject: preview.subject,
                     body: preview.body,
-                    attachments: emailAttachments
+                    attachments: validAttachments
                 };
             });
 
@@ -910,13 +945,17 @@ class EnvialiteApp {
             // Prepare attachments data - ensure all attachments are properly formatted
             const attachmentsData = {};
             for (const [filename, fileData] of this.attachments) {
-                attachmentsData[filename] = {
-                    filename: fileData.name, // ✅ Backend expects 'filename' property
-                    type: fileData.type,
-                    size: fileData.size,
-                    data: fileData.data, // Base64 data URL
-                    uploadedAt: fileData.uploadedAt
-                };
+                if (fileData && fileData.data) {
+                    attachmentsData[filename] = {
+                        filename: fileData.name, // ✅ Backend expects 'filename' property
+                        type: fileData.type,
+                        size: fileData.size,
+                        data: fileData.data, // Base64 data URL
+                        uploadedAt: fileData.uploadedAt
+                    };
+                } else {
+                    console.error(`Global attachment ${filename} is missing data`);
+                }
             }
 
             const response = await fetch('/send-emails', {
