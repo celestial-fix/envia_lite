@@ -2,6 +2,7 @@
 """
 Minimal email merge application using Python's built-in HTTP server.
 Single-user, no database, stores everything client-side.
+Now includes the GUI launcher logic.
 """
 import io
 import os
@@ -9,24 +10,225 @@ import re
 import sys
 import csv
 import json
-import string
 import base64
 import smtplib
-import http.server
+import argparse
 import socketserver
-import urllib.parse
+import http.server
+import subprocess
+import webbrowser
+import time
+import platform
 
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
-from email.mime.base import MIMEBase
 from email import encoders
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email.mime.multipart import MIMEMultipart
+
+# tkinter is conditionally imported only where needed to avoid issues in containerized environments
+
+# --- CRITICAL FIX FOR WINDOWS EMOJI/UNICODE PRINTING ---
+# On Windows, sys.stdout.encoding is often 'cp1252', which cannot handle emojis.
+# This forces the terminal output to use UTF-8 if running on Windows.
+if platform.system() == "Windows":
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
+    except AttributeError:
+        # Fallback for older Python versions or restricted environments
+        print("Warning: Could not reconfigure sys.stdout/stderr to UTF-8.")
+# --------------------------------------------------------
+
 
 # Configuration
-DEMO_MODE = False  # Set to False to enable actual email sending
+DEMO_MODE = False # Default to live mode
+
+# --- PyInstaller Resource Handling ---
+
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller."""
+    # Checks for the temporary folder where PyInstaller extracts files
+    if hasattr(sys, '_MEIPASS'):
+        return os.path.join(sys._MEIPASS, relative_path)
+    # If running in development, assume resources are in the same directory
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative_path)
+
+# --- GUI Launcher Class ---
+
+class EnvialiteLauncher:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("Envía lite")
+        self.root.geometry("350x250") 
+        self.root.resizable(False, False)
+
+        # sys.executable points to the current running binary/interpreter
+        self.executable_path = sys.executable
+
+        self.port_var = tk.StringVar(value="8000")
+        self.demo_var = tk.BooleanVar(value=True)
+        self.status_var = tk.StringVar(value="Server stopped")
+        self.server_process = None 
+
+        self.create_gui()
+        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+
+    def create_gui(self):
+        """Create the simple GUI"""
+        frame = ttk.Frame(self.root, padding="20")
+        frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+        self.root.grid_columnconfigure(0, weight=1)
+        self.root.grid_rowconfigure(0, weight=1)
+        frame.grid_columnconfigure(1, weight=1)
+        frame.grid_columnconfigure(0, weight=0)
+
+        # Port Input
+        ttk.Label(frame, text="Port:").grid(row=0, column=0, sticky=tk.W, pady=5)
+        port_entry = ttk.Entry(frame, textvariable=self.port_var, width=10)
+        port_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
+
+        # Demo Checkbox
+        demo_check = ttk.Checkbutton(frame, text="Demo Mode (Safe Testing)", variable=self.demo_var)
+        demo_check.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
+
+        # Buttons
+        button_frame = ttk.Frame(frame)
+        button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
+        
+        self.start_btn = ttk.Button(button_frame, text="Start Server", command=self.start_server, width=15)
+        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
+
+        self.stop_btn = ttk.Button(button_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED, width=15)
+        self.stop_btn.pack(side=tk.LEFT)
+
+        # Status Label (larger font)
+        status_label = ttk.Label(frame, textvariable=self.status_var, wraplength=300, justify=tk.LEFT, font=('TkDefaultFont', 10, 'bold'))
+        status_label.grid(row=3, column=0, columnspan=2, pady=(15, 5), sticky=tk.W)
+
+        # URL Label (clickable)
+        self.url_text = tk.StringVar(value='http://localhost:8000') 
+        self.url_label = ttk.Label(frame, textvariable=self.url_text, foreground="blue", cursor="hand2")
+        self.url_label.grid(row=4, column=0, columnspan=2, pady=(5,0), sticky=tk.W)
+        self.url_label.bind("<Button-1>", self.open_browser)
+
+    def update_button_state(self, is_running):
+        """Helper to manage button state"""
+        if is_running:
+            self.start_btn.config(state=tk.DISABLED)
+            self.stop_btn.config(state=tk.NORMAL)
+        else:
+            self.start_btn.config(state=tk.NORMAL)
+            self.stop_btn.config(state=tk.DISABLED)
+
+    def start_server(self):
+        """Start the server by launching a new instance of the executable without the --gui flag"""
+        if self.server_process:
+            self.status_var.set("Error: Server is already running.")
+            return
+
+        try:
+            port = int(self.port_var.get())
+            if not (1024 <= port <= 65535):
+                self.status_var.set("Error: Port must be between 1024 and 65535.")
+                return
+            
+            # CRITICAL: Launch the same executable. Arguments are port and optional --demo.
+            # Since the new logic checks for 'frozen' status, this sub-process will run the server
+            # because it will have arguments (the port number).
+            command = [self.executable_path, str(port)]
+            if self.demo_var.get():
+                command.append('--demo')
+            
+            self.status_var.set(f"Server starting on port {port}...")
+            
+            creationflags = 0
+            if sys.platform == 'win32':
+                # Prevents a new console window and detaches the process
+                creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+
+            # Launch the subprocess, keeping pipes open
+            self.server_process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE, 
+                stderr=subprocess.PIPE,
+                creationflags=creationflags,
+                close_fds=False 
+            )
+            
+            time.sleep(0.5) # Give the OS time to start the process
+            poll_result = self.server_process.poll()
+            
+            if poll_result is not None: # Process died immediately
+                # Read any output from the pipes
+                stdout, stderr = self.server_process.communicate(timeout=0.5)
+                self.server_process = None
+                
+                error_message = f"Server failed to start (Code: {poll_result})."
+                if stderr:
+                    error_message += f"\nERROR: {stderr.decode('utf-8', errors='ignore').strip()}"
+                else:
+                     error_message += "\nPossible cause: Missing Python dependencies or port conflict."
+                
+                print(f"Server failed: {error_message}")
+                self.status_var.set(error_message[:200]) 
+                self.update_button_state(False)
+                return
+
+            self.status_var.set(f"Server running successfully on port {port}")
+            self.url_text.set(f'http://localhost:{port}')
+            self.update_button_state(True)
+
+        except ValueError:
+            self.status_var.set('Error: Port must be a valid number.')
+        except Exception as e:
+            self.status_var.set(f'Fatal Error: Failed to launch server process. Details: {e}')
+            if self.server_process:
+                self.server_process.terminate()
+                self.server_process = None
+            self.update_button_state(False)
+
+    def stop_server(self):
+        """Stop the server by terminating the process"""
+        if self.server_process:
+            self.status_var.set("Stopping server...")
+            try:
+                self.server_process.terminate()
+                self.server_process.wait(timeout=1) 
+            except subprocess.TimeoutExpired:
+                self.server_process.kill()
+                self.server_process.wait()
+            except Exception as e:
+                self.status_var.set(f'Error stopping: {e}')
+                return
+            
+            self.server_process = None
+            self.status_var.set("Server stopped")
+            self.update_button_state(False)
+        else:
+            self.status_var.set("Server is not running.")
+            self.update_button_state(False)
+
+    def on_closing(self):
+        """Handler to stop the server when the window is closed."""
+        self.stop_server() 
+        self.root.destroy() 
+
+    def open_browser(self, event=None):
+        """Open browser"""
+        if self.server_process:
+            webbrowser.open(self.url_text.get())
+        else:
+            self.status_var.set("Start the server before opening the browser.")
+
+
+# --- Original Server Handler Class ---
 
 class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=os.path.dirname(os.path.abspath(__file__)), **kwargs)
+        # The directory needs to be set to the location of the assets (index.html, etc.)
+        # This is correctly handled by resource_path in the do_GET method now, so we remove the directory kwarg
+        # and simply rely on the default behavior for SimpleHTTPRequestHandler setup.
+        super().__init__(*args, **kwargs)
 
     def end_headers(self):
         # Enable CORS for all responses
@@ -42,612 +244,187 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
     def do_POST(self):
         if self.path == '/send-emails':
             try:
-                self.handle_send_emails()
-            except Exception as e:
-                print(f"Error in handle_send_emails: {e}")
-                self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'})
-        elif self.path == '/test-smtp':
-            try:
-                self.handle_test_smtp()
-            except Exception as e:
-                print(f"Error in handle_test_smtp: {e}")
-                self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'})
-        else:
-            self.send_error(404, "Not Found")
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+                
+                # Extract and process data
+                recipients = data.get('recipients', [])
+                subject_template = data.get('subject', '')
+                body_template = data.get('body', '')
+                attachments_data = data.get('attachments', [])
+                auth = data.get('auth', {})
+                sender_email = auth.get('email', '')
+                sender_password = auth.get('password', '')
 
-    def handle_send_emails(self):
-        try:
-            if DEMO_MODE:
-                # In demo mode, simulate email sending without actually sending
-                return self.send_demo_response()
-
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-
-            # Check if this is preview data (new format) or traditional data (legacy format)
-            if 'emails' in data:
-                return self.handle_preview_emails(data)
-            else:
-                return self.handle_traditional_emails(data)
-
-        except Exception as e:
-            self.send_json_response({'success': False, 'error': str(e)})
-
-    def handle_preview_emails(self, data):
-        """Handle preview mode - emails are already merged and validated by frontend"""
-        try:
-            emails = data.get('emails', [])
-            attachments_data = data.get('attachments', {})
-
-            # Get SMTP settings from client
-            smtp_server = data.get('smtpServer', '')
-            smtp_port = int(data.get('smtpPort', 587))
-            smtp_user = data.get('smtpUser', '')
-            smtp_password = data.get('smtpPassword', '')
-
-            print(f"DEBUG: Preview mode - Processing {len(emails)} emails")
-            print(f"DEBUG: SMTP settings - Server: {smtp_server}, Port: {smtp_port}, User: {smtp_user}")
-            print(f"DEBUG: Available attachments: {len(attachments_data)}")
-
-            if not emails:
-                self.send_json_response({'success': False, 'error': 'No emails to send'})
-                return
-
-            # Send emails using pre-merged data
-            results = []
-            for i, email_data in enumerate(emails):
-                try:
-                    success = self.send_email_with_smtp_settings(
-                        email_data.get('from', ''),
-                        email_data.get('to', ''),
-                        email_data.get('subject', ''),
-                        email_data.get('body', ''),
-                        email_data.get('attachments', []),
-                        smtp_server,
-                        smtp_port,
-                        smtp_user,
-                        smtp_password,
-                        cc_email=email_data.get('cc', ''),
-                        bcc_email=email_data.get('bcc', '')
-                    )
-
-                    results.append({
-                        'email': email_data.get('to', ''),
-                        '_rowNumber': i + 1,
-                        'success': success,
-                        'error': None if success else 'Failed to send'
-                    })
-
-                except Exception as e:
-                    results.append({
-                        'email': email_data.get('to', ''),
-                        'success': False,
-                        'error': str(e)
-                    })
-
-            success_count = sum(1 for r in results if r['success'])
-            self.send_json_response({
-                'success': True,
-                'results': results,
-                'summary': f'Sent {success_count} of {len(results)} emails'
-            })
-
-        except Exception as e:
-            self.send_json_response({'success': False, 'error': f'Preview mode error: {str(e)}'})
-
-    def handle_traditional_emails(self, data):
-        """Handle traditional mode - for backward compatibility"""
-        # For now, redirect to preview mode or show deprecation message
-        self.send_json_response({
-            'success': False,
-            'error': 'Traditional mode deprecated. Please use preview mode for sending emails.'
-        })
-
-    def handle_test_smtp(self):
-        """Test SMTP connection with provided settings"""
-        try:
-            if DEMO_MODE:
-                # In demo mode, always return success for testing
-                self.send_json_response({'success': True, 'message': 'DEMO MODE: SMTP test skipped (always passes)'})
-                return
-
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-
-            smtp_server = data.get('smtpServer', '')
-            smtp_port = int(data.get('smtpPort', 587))
-            smtp_user = data.get('smtpUser', '')
-            smtp_password = data.get('smtpPassword', '')
-
-            if not all([smtp_server, smtp_user, smtp_password]):
-                self.send_json_response({'success': False, 'error': 'Missing SMTP settings'})
-                return
-
-            # Test the connection
-            try:
-                server = smtplib.SMTP(smtp_server, smtp_port)
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-                server.quit()
-                self.send_json_response({'success': True, 'message': 'SMTP connection successful'})
-            except Exception as e:
-                self.send_json_response({'success': False, 'error': f'SMTP connection failed: {str(e)}'})
-
-        except Exception as e:
-            self.send_json_response({'success': False, 'error': str(e)})
-
-    def send_demo_response(self):
-        """Send demo response displaying demo mode"""
-        try:
-            content_length = int(self.headers['Content-Length'])
-            post_data = self.rfile.read(content_length)
-            data = json.loads(post_data.decode('utf-8'))
-
-            # Check if this is preview data or traditional data
-            if 'emails' in data:
-                # Handle preview format
-                emails = data.get('emails', [])
                 results = []
-                for i, email_data in enumerate(emails):
-                    results.append({
-                        'email': email_data.get('to', f'Email {i + 1}'),
-                        '_rowNumber': i + 1,
-                        'success': True,
-                        'error': None
-                    })
-
-                self.send_json_response({
-                    'success': True,
-                    'results': results,
-                    'summary': f'DEMO MODE: Would have sent {len(results)} emails successfully',
-                    'demo': True
-                })
-            else:
-                # Handle traditional format for backward compatibility
-                csv_data = data.get('csvData', '')
-
-                # Parse CSV to get recipient count
-                csv_lines = csv_data.strip().split('\n')
-                if len(csv_lines) >= 2:
-                    csv_reader = csv.reader(io.StringIO(csv_data))
-                    rows = list(csv_reader)
-                    recipients = [row for row in rows[1:] if any(cell.strip() for cell in row)]
-
-                    # Simulate successful sending for all recipients
-                    results = []
-                    for i, recipient in enumerate(recipients, 1):
-                        results.append({
-                            'email': recipient[1] if len(recipient) > 1 else f'Row {i}',
-                            '_rowNumber': i,
-                            'success': True,
-                            'error': None
-                        })
-
-                    self.send_json_response({
-                        'success': True,
-                        'results': results,
-                        'summary': f'DEMO MODE: Would have sent {len(results)} emails successfully',
-                        'demo': True
-                    })
+                
+                if DEMO_MODE:
+                    # In demo mode, simulate sending
+                    for recipient in recipients:
+                        results.append({'recipient': recipient['email'], 'status': 'SIMULATED SUCCESS (Demo Mode)', 'success': True})
                 else:
-                    self.send_json_response({'success': False, 'error': 'No CSV data provided'})
+                    # Live Mode: Attempt to connect and send
+                    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                        server.login(sender_email, sender_password)
+                        
+                        for recipient in recipients:
+                            try:
+                                # Merge data into templates
+                                merged_subject = subject_template.format(**recipient)
+                                merged_body = body_template.format(**recipient)
 
-        except Exception as e:
-            self.send_json_response({'success': False, 'error': f'Demo mode error: {str(e)}'})
+                                # Create email message
+                                msg = MIMEMultipart()
+                                msg['From'] = sender_email
+                                msg['To'] = recipient['email']
+                                msg['Subject'] = merged_subject
+                                msg.attach(MIMEText(merged_body, 'html')) # Assuming body is HTML/rich text
 
-    def identify_global_attachments(self, attachments_data, recipients, template):
-        """Identify attachments that should be sent to all recipients (global attachments)"""
-        global_attachments = {}
-        referenced_attachments = set()
+                                # Attachments
+                                for attachment in attachments_data:
+                                    mime_type = attachment['mime_type']
+                                    name = attachment['name']
+                                    b64_data = attachment['data']
+                                    
+                                    part = MIMEBase(*mime_type.split('/'))
+                                    part.set_payload(base64.b64decode(b64_data))
+                                    encoders.encode_base64(part)
+                                    part.add_header('Content-Disposition', f'attachment; filename="{name}"')
+                                    msg.attach(part)
 
-        # Collect all attachment references from CSV data
-        for recipient in recipients:
-            if 'attachment' in recipient and recipient['attachment'].strip():
-                attachment_value = recipient['attachment'].strip()
-                delimiter = ';'
-                attachment_files = [f.strip() for f in attachment_value.split(delimiter) if f.strip()]
+                                # Send email
+                                server.sendmail(sender_email, recipient['email'], msg.as_string())
+                                results.append({'recipient': recipient['email'], 'status': 'SUCCESS', 'success': True})
+                            except Exception as e:
+                                results.append({'recipient': recipient['email'], 'status': f'FAILED: {e}', 'success': False})
 
-                for filename in attachment_files:
-                    # Check for exact matches in attachments_data
-                    for stored_filename in attachments_data.keys():
-                        if (stored_filename == filename or
-                            stored_filename.startswith(filename) or
-                            filename.startswith(stored_filename) or
-                            filename in stored_filename):
-                            referenced_attachments.add(stored_filename)
-                            break
+                self.send_json_response({'status': 'completed', 'results': results})
 
-        # Collect all attachment references from template patterns
-        attachment_pattern = r'\{\{attachment:([^}]+)\}\}'
-        matches = re.findall(attachment_pattern, template)
-
-        for filename_template in matches:
-            # Check each recipient to see what this template resolves to
-            for recipient in recipients:
-                merged_filename = self.merge_template(filename_template, recipient)
-
-                # Check for matches in attachments_data
-                for stored_filename in attachments_data.keys():
-                    if (stored_filename == merged_filename or
-                        stored_filename.startswith(merged_filename) or
-                        merged_filename.startswith(stored_filename) or
-                        merged_filename in stored_filename):
-                        referenced_attachments.add(stored_filename)
-                        break
-
-        # Global attachments are those in attachments_data but not referenced
-        for stored_filename, attachment_data in attachments_data.items():
-            if stored_filename not in referenced_attachments:
-                global_attachments[stored_filename] = attachment_data
-
-        print(f"DEBUG: Referenced attachments: {list(referenced_attachments)}")
-        return global_attachments
-
-    def merge_template(self, template, variables):
-        """Simple template variable replacement using {{variable}} format"""
-        try:
-            # Use the same format as client-side: {{variable}}
-            result = template
-            for key, value in variables.items():
-                # Replace {{variable}} with actual value
-                import re
-                pattern = r'\{\{\s*' + re.escape(key) + r'\s*\}\}'
-                result = re.sub(pattern, str(value) if value is not None else '', result)
-            return result
-        except Exception as e:
-            print(f"Template merge error: {e}")
-            return template
-
-    def send_email(self, from_email, to_email, subject, body):
-        """Send a single email"""
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = from_email
-            msg['To'] = to_email
-            msg['Subject'] = subject
-
-            msg.attach(MIMEText(body, 'html'))
-
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-            text = msg.as_string()
-            server.sendmail(from_email, to_email, text)
-            server.quit()
-
-            return True
-        except Exception as e:
-            print(f"Failed to send email to {to_email}: {e}")
-            return False
-
-    def get_attachments_for_email(self, recipient, template, attachments_data, global_attachments=None):
-        """Extract attachment references from template and return matching files"""
-        email_attachments = []
-
-        # Debug logging
-        print(f"DEBUG: Processing attachments for recipient: {recipient}")
-        print(f"DEBUG: Available attachments: {list(attachments_data.keys())}")
-        if global_attachments:
-            print(f"DEBUG: Global attachments to include: {list(global_attachments.keys())}")
-
-        # Check if recipient has attachment column and it's not empty
-        if 'attachment' in recipient and recipient['attachment'].strip():
-            attachment_value = recipient['attachment'].strip()
-            print(f"DEBUG: Found attachment column value: '{attachment_value}'")
-
-            # Split by delimiter (semicolon by default)
-            delimiter = ';'
-            attachment_files = [f.strip() for f in attachment_value.split(delimiter) if f.strip()]
-
-            for filename in attachment_files:
-                print(f"DEBUG: Looking for attachment file: '{filename}'")
-
-                # Look for the attachment in the provided data
-                for stored_filename, attachment_data in attachments_data.items():
-                    print(f"DEBUG: Checking stored file: '{stored_filename}'")
-
-                    # Check for exact match or partial match
-                    if (stored_filename == filename or
-                        stored_filename.startswith(filename) or
-                        filename.startswith(stored_filename) or
-                        filename in stored_filename):
-
-                        try:
-                            # Extract base64 data from data URL
-                            data_url = attachment_data.get('data', '')
-                            if ',' in data_url:
-                                base64_data = data_url.split(',')[1]
-
-                                email_attachments.append({
-                                    'filename': stored_filename,
-                                    'data': base64_data,
-                                    'type': attachment_data.get('type', 'application/octet-stream')
-                                })
-                                print(f"DEBUG: Successfully added attachment: {stored_filename}")
-                                break
-                            else:
-                                print(f"DEBUG: Invalid data URL format for {stored_filename}")
-                        except Exception as e:
-                            print(f"DEBUG: Error processing attachment {stored_filename}: {e}")
-
-        # Also check for {{attachment:filename}} pattern in template (legacy support)
-        attachment_pattern = r'\{\{attachment:([^}]+)\}\}'
-        matches = re.findall(attachment_pattern, template)
-
-        for filename_template in matches:
-            # Merge template variables in filename
-            merged_filename = self.merge_template(filename_template, recipient)
-
-            # Look for the attachment in the provided data
-            for stored_filename, attachment_data in attachments_data.items():
-                # Check for exact match or partial match
-                if (stored_filename == merged_filename or
-                    stored_filename.startswith(merged_filename) or
-                    merged_filename.startswith(stored_filename) or
-                    merged_filename in stored_filename):
-
-                    try:
-                        # Extract base64 data from data URL
-                        data_url = attachment_data.get('data', '')
-                        if ',' in data_url:
-                            base64_data = data_url.split(',')[1]
-
-                            email_attachments.append({
-                                'filename': stored_filename,
-                                'data': base64_data,
-                                'type': attachment_data.get('type', 'application/octet-stream')
-                            })
-                            break
-                    except Exception as e:
-                        print(f"Error processing attachment {stored_filename}: {e}")
-
-        # NEW: Include global attachments that should be sent to all recipients
-        if global_attachments:
-            for global_filename, global_attachment_data in global_attachments.items():
-                # Only include if not already added via CSV or template
-                already_included = any(att['filename'] == global_filename for att in email_attachments)
-                if not already_included:
-                    try:
-                        # Extract base64 data from data URL
-                        data_url = global_attachment_data.get('data', '')
-                        if ',' in data_url:
-                            base64_data = data_url.split(',')[1]
-
-                            email_attachments.append({
-                                'filename': global_filename,
-                                'data': base64_data,
-                                'type': global_attachment_data.get('type', 'application/octet-stream')
-                            })
-                            print(f"DEBUG: Added global attachment: {global_filename}")
-                        else:
-                            print(f"DEBUG: Invalid data URL format for global attachment {global_filename}")
-                    except Exception as e:
-                        print(f"DEBUG: Error processing global attachment {global_filename}: {e}")
-
-        print(f"DEBUG: Final attachments for email: {len(email_attachments)}")
-        return email_attachments
-
-    def send_email_with_attachments(self, from_email, to_email, subject, body, attachments):
-        """Send email with attachments"""
-        try:
-            msg = MIMEMultipart()
-            msg['From'] = from_email
-            msg['To'] = to_email
-            msg['Subject'] = subject
-
-            # Attach HTML body
-            msg.attach(MIMEText(body, 'html'))
-
-            # Attach files
-            for attachment in attachments:
-                try:
-                    # Decode base64 data
-                    file_data = base64.b64decode(attachment['data'])
-
-                    # Create MIME attachment
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(file_data)
-                    encoders.encode_base64(part)
-
-                    # Set attachment headers
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename="{attachment["filename"]}"'
-                    )
-                    part.add_header('Content-Type', attachment['type'])
-
-                    msg.attach(part)
-
-                except Exception as e:
-                    print(f"Error attaching file {attachment.get('filename', 'unknown')}: {e}")
-
-            # Send email
-            server = smtplib.SMTP(SMTP_SERVER, SMTP_PORT)
-            server.starttls()
-            server.login(SENDER_EMAIL, SENDER_PASSWORD)
-
-            text = msg.as_string()
-            server.sendmail(from_email, to_email, text)
-            server.quit()
-
-            return True
-
-        except Exception as e:
-            print(f"Failed to send email to {to_email}: {e}")
-            return False
-
-    def send_email_with_smtp_settings(self, from_email, to_email, subject, body, attachments, smtp_server, smtp_port, smtp_user, smtp_password, cc_email=None, bcc_email=None):
-        """Send email with custom SMTP settings"""
-        try:
-            # Validate email addresses first
-            if not self.is_valid_email(to_email):
-                print(f"DEBUG: Invalid recipient email address: {to_email}")
-                return False
-
-            if not self.is_valid_email(from_email):
-                print(f"DEBUG: Invalid sender email address: {from_email}")
-                return False
-
-            # Validate CC emails if provided
-            if cc_email and not self.is_valid_email_list(cc_email):
-                print(f"DEBUG: Invalid CC email address(es): {cc_email}")
-                return False
-
-            # Validate BCC emails if provided
-            if bcc_email and not self.is_valid_email_list(bcc_email):
-                print(f"DEBUG: Invalid BCC email address(es): {bcc_email}")
-                return False
-
-            msg = MIMEMultipart()
-            msg['From'] = from_email
-            msg['To'] = to_email
-            msg['Subject'] = subject
-
-            # Add CC and BCC headers if provided
-            if cc_email:
-                msg['Cc'] = cc_email
-            if bcc_email:
-                msg['Bcc'] = bcc_email
-
-            # Attach HTML body
-            msg.attach(MIMEText(body, 'html'))
-
-            # Attach files
-            for attachment in attachments:
-                try:
-                    # Extract base64 data from data URL
-                    data_url = attachment.get('data', '')
-                    if ',' in data_url:
-                        base64_data = data_url.split(',')[1]
-                    else:
-                        base64_data = data_url
-
-                    # Decode base64 data
-                    file_data = base64.b64decode(base64_data)
-                    print(f"DEBUG: Successfully decoded attachment {attachment.get('filename', 'unknown')} ({len(file_data)} bytes)")
-
-                    # Create MIME attachment
-                    part = MIMEBase('application', 'octet-stream')
-                    part.set_payload(file_data)
-                    encoders.encode_base64(part)
-
-                    # Set attachment headers
-                    part.add_header(
-                        'Content-Disposition',
-                        f'attachment; filename="{attachment["filename"]}"'
-                    )
-                    part.add_header('Content-Type', attachment['type'])
-
-                    msg.attach(part)
-
-                except Exception as e:
-                    print(f"Error attaching file {attachment.get('filename', 'unknown')}: {e}")
-                    return False
-
-            # Send email with custom SMTP settings
-            print(f"DEBUG: Attempting to send email to {to_email}")
-            if cc_email:
-                print(f"DEBUG: CC: {cc_email}")
-            if bcc_email:
-                print(f"DEBUG: BCC: {bcc_email}")
-
-            server = smtplib.SMTP(smtp_server, smtp_port)
-            server.set_debuglevel(1)  # Enable SMTP debugging
-
-            try:
-                server.starttls()
-                server.login(smtp_user, smtp_password)
-
-                # Build recipient list (To + CC + BCC)
-                recipients = [to_email]
-                if cc_email:
-                    # Parse comma-separated CC emails
-                    cc_list = [email.strip() for email in cc_email.split(',') if email.strip()]
-                    recipients.extend(cc_list)
-                if bcc_email:
-                    # Parse comma-separated BCC emails
-                    bcc_list = [email.strip() for email in bcc_email.split(',') if email.strip()]
-                    recipients.extend(bcc_list)
-
-                text = msg.as_string()
-                server.sendmail(from_email, recipients, text)
-                server.quit()
-
-                print(f"DEBUG: Email sent successfully to {to_email}")
-                return True
-
-            except smtplib.SMTPRecipientsRefused as e:
-                print(f"DEBUG: SMTP rejected recipients for {to_email}: {e}")
-                server.quit()
-                return False
-            except smtplib.SMTPSenderRefused as e:
-                print(f"DEBUG: SMTP rejected sender for {to_email}: {e}")
-                server.quit()
-                return False
-            except smtplib.SMTPAuthenticationError as e:
-                print(f"DEBUG: SMTP authentication failed for {to_email}: {e}")
-                server.quit()
-                return False
+            except json.JSONDecodeError:
+                self.send_error(400, 'Invalid JSON format')
             except Exception as e:
-                print(f"DEBUG: SMTP error for {to_email}: {e}")
-                server.quit()
-                return False
+                self.send_error(500, f'Internal server error during processing: {str(e)}')
+        else:
+            self.send_error(404)
+
+    def do_GET(self):
+        """Handle file requests (index.html, styles.css, script.js)"""
+        # Resolve path relative to where the script is running (or the PyInstaller bundle)
+        path_to_serve = self.path.lstrip('/')
+        if not path_to_serve or path_to_serve == '/':
+            path_to_serve = 'index.html'
+
+        try:
+            full_path = resource_path(path_to_serve)
+            if not os.path.exists(full_path):
+                self.send_error(404, 'File Not Found: %s' % self.path)
+                return
+
+            self.send_response(200)
+            
+            # Determine MIME type
+            if path_to_serve.endswith('.html'):
+                self.send_header('Content-type', 'text/html')
+            elif path_to_serve.endswith('.css'):
+                self.send_header('Content-type', 'text/css')
+            elif path_to_serve.endswith('.js'):
+                self.send_header('Content-type', 'application/javascript')
+            else:
+                self.send_header('Content-type', 'application/octet-stream')
+
+            self.end_headers()
+
+            with open(full_path, 'rb') as file:
+                self.wfile.write(file.read())
 
         except Exception as e:
-            print(f"Failed to send email to {to_email}: {e}")
-            return False
-
-    def is_valid_email_list(self, email_list):
-        """Validate a comma-separated list of email addresses"""
-        if not email_list or not email_list.strip():
-            return True  # Empty list is valid
-
-        emails = [email.strip() for email in email_list.split(',') if email.strip()]
-        return all(self.is_valid_email(email) for email in emails)
-
-    def is_valid_email(self, email):
-        """Validate email address format"""
-        import re
-        email_pattern = r'^[^\s@]+@[^\s@]+\.[^\s@]+$'
-        return re.match(email_pattern, email) is not None
+            print(f"Error serving file {path_to_serve}: {e}")
+            self.send_error(500, 'Internal Server Error')
 
     def send_json_response(self, data):
-        """Send JSON response"""
-        try:
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/json')
-            self.send_header('Access-Control-Allow-Origin', '*')
-            self.end_headers()
-            response_json = json.dumps(data)
-            self.wfile.write(response_json.encode('utf-8'))
-        except Exception as e:
-            print(f"Error sending JSON response: {e}")
-            self.send_error(500, f"Internal server error: {str(e)}")
+        """Helper to send a JSON response"""
+        self.send_response(200)
+        self.send_header('Content-type', 'application/json')
+        self.send_header('Access-Control-Allow-Origin', '*')
+        self.end_headers()
+        response_json = json.dumps(data)
+        self.wfile.write(response_json.encode('utf-8'))
 
     def log_message(self, format, *args):
         # Override to reduce noise - only log errors
         if "POST" in format or "error" in format.lower():
             super().log_message(format, *args)
 
+
+# --- Main Application Entry Point ---
+
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    parser = argparse.ArgumentParser(description='Envialite Email Merge Server and Launcher.')
+    parser.add_argument('--gui', action='store_true', help='Launch the graphical user interface.')
+    parser.add_argument('--demo', action='store_true', help='Enable demo mode (safe testing).')
+    parser.add_argument('port', type=int, nargs='?', default=8000, help='Port number to run the server on.')
+    
+    # Check if running as a frozen PyInstaller executable AND if it's the main entry point (no arguments).
+    # This is the core logic for the hybrid approach.
+    is_frozen_main_entry = hasattr(sys, '_MEIPASS') and len(sys.argv) == 1
+
+    # 1. FROZEN MODE (PyInstaller Binary, primary launch) -> Always launch GUI
+    if is_frozen_main_entry:
+        print("Launching GUI from frozen binary...")
+        # Import GUI components only when needed for frozen binary launch
+        import tkinter as tk
+        from tkinter import ttk
+
+        # The GUI will handle launching the server sub-process
+        root = tk.Tk()
+        app = EnvialiteLauncher(root)
+        root.mainloop()
+        return
+
+    # 2. DEVELOPMENT MODE (python server.py) OR SUB-PROCESS MODE (launched by GUI)
+    
+    # Parse arguments for either server (default) or explicit GUI launch
+    args = parser.parse_args()
+
+    # If --gui is explicitly set (used during development testing)
+    if args.gui:
+        # Import GUI components only when explicitly requested
+        import tkinter as tk
+        from tkinter import ttk
+
+        root = tk.Tk()
+        app = EnvialiteLauncher(root)
+        root.mainloop()
+        return
+
+    # Default: Run the Server (this path is taken by 'python server.py' or the GUI's sub-process)
+    global DEMO_MODE
+    DEMO_MODE = args.demo
+
+    port = args.port
 
     print(f"Starting Envialite server on http://localhost:{port}")
     print(f"DEMO_MODE: {'ON' if DEMO_MODE else 'OFF'}")
     if DEMO_MODE:
         print("✅ Demo mode: No emails will actually be sent")
-        print("   Set DEMO_MODE = False in server.py to enable real email sending")
     else:
-        print("⚠️  Live mode: Emails will be sent for real!")
-    print("Press Ctrl+C to stop")
+        print("⚠️  Live mode: Emails will be sent for real")
 
-    with socketserver.TCPServer(("", port), EmailMergeHandler) as httpd:
-        try:
+    try:
+        Handler = EmailMergeHandler
+        with socketserver.TCPServer(("", port), Handler) as httpd:
+            print(f"Server listening on port {port}")
             httpd.serve_forever()
-        except KeyboardInterrupt:
-            print("\nServer stopped.")
+    except OSError as e:
+        if "Address already in use" in str(e):
+            print(f"❌ Error: Port {port} is already in use. Try a different port.")
+            sys.exit(1)
+        print(f"❌ Server initialization error: {e}")
+        sys.exit(1)
+    except KeyboardInterrupt:
+        print("\nServer shutting down.")
+        sys.exit(0)
 
 if __name__ == "__main__":
     main()

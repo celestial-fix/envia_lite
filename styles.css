@@ -1,4 +1,4 @@
-/* Envialite - Personal Mail Merge Tool Styles */
+/* Envia lite - Personal Mail Merge Tool Styles */
 
 * {
     box-sizing: border-box;
@@ -26,7 +26,7 @@ header {
     text-align: center;
     margin-bottom: 30px;
     padding: 20px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     border-radius: 10px;
 }
@@ -73,9 +73,9 @@ header p {
 }
 
 .tab-btn.active {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
 /* Tab Cards */
@@ -399,7 +399,7 @@ textarea:focus {
 }
 
 button {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     border: none;
     padding: 12px 24px;
@@ -413,7 +413,7 @@ button {
 
 button:hover {
     transform: translateY(-2px);
-    box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+    box-shadow: 0 4px 15px rgba(0, 123, 255, 0.4);
 }
 
 button:active {
@@ -433,7 +433,7 @@ button:active {
 }
 
 .preview-navigation button {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     border: none;
     padding: 8px 16px;
@@ -446,7 +446,7 @@ button:active {
 
 .preview-navigation button:hover:not(:disabled) {
     transform: translateY(-1px);
-    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
 }
 
 .preview-navigation button:disabled {
@@ -747,14 +747,14 @@ button:active {
 }
 
 .data-table thead {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     position: sticky;
     top: 0;
     z-index: 10;
 }
 
 .header-cell {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: #007bff;
     color: white;
     padding: 12px 8px;
     text-align: left;
@@ -765,13 +765,13 @@ button:active {
 }
 
 .header-cell:hover {
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    background: #0056b3;
 }
 
 .header-cell:focus {
     outline: 2px solid #fff;
     outline-offset: -2px;
-    background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+    background: #0056b3;
 }
 
 .header-content {
@@ -792,7 +792,7 @@ button:active {
     color: white;
     width: 20px;
     height: 20px;
-    border-radius: 50%;
+    border-radius: 4px;
     cursor: pointer;
     font-size: 14px;
     font-weight: bold;
@@ -853,7 +853,7 @@ button:active {
     color: #dc3545;
     width: 16px;
     height: 16px;
-    border-radius: 50%;
+    border-radius: 3px;
     cursor: pointer;
     font-size: 12px;
     font-weight: bold;

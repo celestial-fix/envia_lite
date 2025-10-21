@@ -3,19 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Envialite - Personal Mail Merge</title>
+    <title>Envía - Mail Merge</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
     <div class="container">
         <header>
-            <h1>📧 Envialite</h1>
+            <h1>📨 Envía</h1>
             <p>Personal Mail Merge Tool</p>
         </header>
 
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-            <button class="tab-btn active" onclick="showTab('settings')">📧 Settings</button>
+            <button class="tab-btn active" onclick="showTab('settings')">📧 Account</button>
             <button class="tab-btn" onclick="showTab('template')">📝 Template</button>
             <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
             <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
@@ -25,7 +25,7 @@
         <!-- Tab Content Cards -->
         <div id="settings" class="tab-card active">
             <div class="card-header">
-                <h2>📧 Email Settings</h2>
+                <h2>📧 Email Account Settings</h2>
             </div>
             <div class="card-content">
                 <!-- SMTP Configuration -->
@@ -146,18 +146,6 @@ Your Company"></textarea>
                         <small>Character to split multiple attachment filenames (e.g., ";" for "file1.pdf;file2.pdf")</small>
                     </div>
                 </div>
-
-                <!-- Template Variables Help -->
-                <div class="template-help">
-                    <h3>💡 Template Variables</h3>
-                    <p>Use <code>{{variable}}</code> syntax in any field. Variables are replaced with CSV data:</p>
-                    <ul>
-                        <li><code>{{name}}</code> → John Doe</li>
-                        <li><code>{{email}}</code> → john@example.com</li>
-                        <li><code>{{product}}</code> → Product A</li>
-                        <li><code>{{attachment:{{product}}.pdf}}</code> → Dynamic attachment selection</li>
-                    </ul>
-                </div>
             </div>
         </div>
 
@@ -254,8 +242,8 @@ Your Company"></textarea>
             </div>
             <div class="card-content">
                 <div class="actions-section">
+                    <button id="resetBtn" onclick="resetPreviewToOriginal()" class="btn-delete">↩️ Reset</button>
                     <button id="sendBtn" onclick="sendEmails()">🚀 Send Emails</button>
-                    <button id="saveBtn" onclick="saveData()">💾 Save Data</button>
                     <button id="loadBtn" onclick="loadData()">📂 Load Data</button>
                 </div>
 
@@ -269,29 +257,21 @@ Your Company"></textarea>
 
                     <!-- Editable Email Preview -->
                     <div class="editable-email-preview" id="previewContent">
-                        <div class="preview-actions">
-                            <button onclick="savePreviewChanges()" class="btn-small">💾 Save Changes</button>
-                            <button onclick="resetPreviewToOriginal()" class="btn-small btn-delete">↩️ Reset</button>
-                            <button onclick="refreshPreviewVariables()" class="btn-small">🔄 Refresh Variables</button>
-                            <button onclick="addPreviewAttachment()" class="btn-small">📎 Add Attachment</button>
-                        </div>
 
                         <div class="preview-form">
                             <!-- Email Headers (Editable) -->
                             <div class="preview-field-group">
-                                <label>From:</label>
+                                <label>From</label>
                             </div>
                             <div class="preview-field-row">
                                 <div class="preview-field-group">
                                     <label>Name:</label>
                                     <input type="text" id="previewFromName" class="preview-input" />
-                                </div>
-                                <div class="preview-field-group">
                                     <label>Email:</label>
                                     <input type="email" id="previewFrom" class="preview-input" />
                                 </div>
                             </div>
-
+                            <hr>
                             <div class="preview-field-group">
                                 <label>To:</label>
                                 <input type="email" id="previewTo" class="preview-input" />
@@ -306,7 +286,7 @@ Your Company"></textarea>
                                 <label>BCC:</label>
                                 <input type="email" id="previewBcc" class="preview-input" />
                             </div>
-
+                            <hr>
                             <div class="preview-field-group">
                                 <label>Subject:</label>
                                 <input type="text" id="previewSubject" class="preview-input" />

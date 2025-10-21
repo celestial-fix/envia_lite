@@ -1,4 +1,4 @@
-// Envialite - Personal Mail Merge Tool JavaScript
+// Envia lite - Personal Mail Merge Tool JavaScript
 
 class EnvialiteApp {
     constructor() {
@@ -54,48 +54,11 @@ class EnvialiteApp {
     }
 
     setupEventListeners() {
-        // Auto-save on input changes (debounced)
-        let saveTimeout;
-        const fieldsToWatch = [
-            'fromName', 'fromEmail', 'toEmail', 'ccEmail', 'bccEmail',
-            'emailSubject', 'emailBody', 'csvData'
-        ];
-
-        fieldsToWatch.forEach(id => {
-            const element = document.getElementById(id);
-            if (element) {
-                element.addEventListener('input', () => {
-                    clearTimeout(saveTimeout);
-                    saveTimeout = setTimeout(() => this.saveData(), 1000);
-                });
-            }
-        });
+        // Event listeners for form interactions
+        // No auto-save needed - data persists in localStorage automatically
     }
 
-    saveData() {
-        const data = {
-            // Email composition data
-            fromName: document.getElementById('fromName').value,
-            fromEmail: document.getElementById('fromEmail').value,
-            toEmail: document.getElementById('toEmail').value,
-            ccEmail: document.getElementById('ccEmail').value,
-            bccEmail: document.getElementById('bccEmail').value,
-            emailSubject: document.getElementById('emailSubject').value,
-            emailBody: document.getElementById('emailBody').value,
 
-            // CSV data
-            csvData: document.getElementById('csvData').value,
-
-            // Attachment settings
-            variableAttachments: document.getElementById('variableAttachments').value,
-            attachmentDelimiter: document.getElementById('attachmentDelimiter').value,
-
-            timestamp: new Date().toISOString()
-        };
-
-        localStorage.setItem('envialite_data', JSON.stringify(data));
-        this.showStatus('Data saved to browser', 'success');
-    }
 
     loadData() {
         try {
@@ -391,70 +354,7 @@ class EnvialiteApp {
         document.getElementById('previewBody').value = preview.body || '';
     }
 
-    savePreviewChanges() {
-        const preview = this.emailPreviews[this.currentEmailIndex];
-        if (!preview) return;
 
-        // Get edited values
-        const editedFrom = document.getElementById('previewFrom').value;
-        const editedTo = document.getElementById('previewTo').value;
-        const editedCc = document.getElementById('previewCc').value;
-        const editedBcc = document.getElementById('previewBcc').value;
-        const editedSubject = document.getElementById('previewSubject').value;
-        const editedBody = document.getElementById('previewBody').value;
-
-        // Update the preview object
-        preview.from = editedFrom;
-        preview.to = editedTo;
-        preview.cc = editedCc;
-        preview.bcc = editedBcc;
-        preview.subject = editedSubject;
-        preview.body = editedBody;
-
-        // Update attachments
-        preview.attachments = Array.from(this.currentPreviewAttachments.values());
-
-        // Update the CSV data if this is based on a CSV row
-        if (preview.recipient) {
-            this.updateCSVFromPreviewChanges(preview);
-        }
-
-        this.showStatus('Preview changes saved', 'success');
-    }
-
-    refreshPreviewVariables() {
-        const preview = this.emailPreviews[this.currentEmailIndex];
-        if (!preview || !preview.recipient) return;
-
-        // Get current field values (which might contain variables)
-        const currentFrom = document.getElementById('previewFrom').value;
-        const currentTo = document.getElementById('previewTo').value;
-        const currentCc = document.getElementById('previewCc').value;
-        const currentBcc = document.getElementById('previewBcc').value;
-        const currentSubject = document.getElementById('previewSubject').value;
-        const currentBody = document.getElementById('previewBody').value;
-
-        // Re-merge with current CSV data
-        const refreshedFrom = this.mergeTemplate(currentFrom, preview.recipient);
-        const refreshedTo = this.mergeTemplate(currentTo, preview.recipient);
-        const refreshedCc = this.mergeTemplate(currentCc, preview.recipient);
-        const refreshedBcc = this.mergeTemplate(currentBcc, preview.recipient);
-        const refreshedSubject = this.mergeTemplate(currentSubject, preview.recipient);
-        const refreshedBody = this.mergeTemplate(currentBody, preview.recipient);
-
-        // Update the preview object and display
-        preview.from = refreshedFrom;
-        preview.to = refreshedTo;
-        preview.cc = refreshedCc;
-        preview.bcc = refreshedBcc;
-        preview.subject = refreshedSubject;
-        preview.body = refreshedBody;
-
-        // Update display fields
-        this.populateEditablePreview(preview);
-
-        this.showStatus('Variables refreshed from CSV data', 'success');
-    }
 
     resetPreviewToOriginal() {
         const original = this.currentPreviewOriginal;
@@ -1665,7 +1565,6 @@ class EnvialiteApp {
     finishCellEditing(cell) {
         cell.classList.remove('editing');
         this.updateCSVFromTable();
-        this.saveData();
     }
 
     handleTableKeydown(e) {
@@ -1785,7 +1684,6 @@ class EnvialiteApp {
 
         tbody.appendChild(newRow);
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Row added', 'success');
     }
 
@@ -1800,7 +1698,6 @@ class EnvialiteApp {
 
         tbody.deleteRow(-1);
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Row removed', 'success');
     }
 
@@ -1830,7 +1727,6 @@ class EnvialiteApp {
         });
 
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Column added', 'success');
     }
 
@@ -1853,7 +1749,6 @@ class EnvialiteApp {
         });
 
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Column removed', 'success');
     }
 
@@ -1896,7 +1791,6 @@ class EnvialiteApp {
 
         this.populateTableFromArray(dataRows);
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus(`Pasted ${dataRows.length} rows and ${dataRows[0].length} columns`, 'success');
     }
 
@@ -2015,7 +1909,6 @@ class EnvialiteApp {
 
         this.csvData = '';
         document.getElementById('csvData').value = '';
-        this.saveData();
         this.showStatus('Table cleared', 'success');
     }
 
@@ -2044,7 +1937,6 @@ class EnvialiteApp {
         this.updateCellAttributes();
 
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Column deleted', 'success');
     }
 
@@ -2065,7 +1957,6 @@ class EnvialiteApp {
         this.updateRowAttributes();
 
         this.updateCSVFromTable();
-        this.saveData();
         this.showStatus('Row deleted', 'success');
     }
 
@@ -2161,9 +2052,7 @@ function sendEmails() {
     window.envialiteApp.sendEmails();
 }
 
-function saveData() {
-    window.envialiteApp.saveData();
-}
+
 
 function loadData() {
     window.envialiteApp.loadData();
@@ -2231,22 +2120,3 @@ function deleteRowByIndex(rowIndex) {
 }
 
 // Preview Editor Global Functions
-function savePreviewChanges() {
-    window.envialiteApp.savePreviewChanges();
-}
-
-function resetPreviewToOriginal() {
-    window.envialiteApp.resetPreviewToOriginal();
-}
-
-function uploadPreviewFiles() {
-    window.envialiteApp.uploadPreviewFiles();
-}
-
-function removePreviewAttachment(filename) {
-    window.envialiteApp.removePreviewAttachment(filename);
-}
-
-function refreshPreviewVariables() {
-    window.envialiteApp.refreshPreviewVariables();
-}

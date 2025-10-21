@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  envialite:
+    build: .
+    ports:
+      - "${PORT:-8000}:8000"
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEMO_MODE=${DEMO_MODE:-false}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    volumes:
+      # Optional: Mount volume for file uploads persistence
+      - ./uploads:/app/uploads
+    networks:
+      - envialite-network
+
+networks:
+  envialite-network:
+    driver: bridge
