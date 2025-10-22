@@ -35,6 +35,9 @@ class EnvialiteApp {
         this.currentEmailIndex = 0;
         this.emailPreviews = []; // Store all generated email previews
 
+        // Demo mode
+        this.isDemoMode = false;
+
         this.init();
     }
 
@@ -43,6 +46,9 @@ class EnvialiteApp {
         this.loadData();
         this.loadAttachments();
         this.loadSmtpSettings();
+
+        // Check demo mode
+        this.checkDemoModeStatus();
 
         // Set up event listeners
         this.setupEventListeners();
@@ -102,8 +108,16 @@ class EnvialiteApp {
 
     parseCSV() {
         try {
-            const lines = this.csvData.trim().split('\n');
-            if (lines.length < 2) {
+            let csvContent = this.csvData.trim();
+
+            // Remove Byte Order Mark (BOM) if present. The BOM is an invisible character
+            // (U+FEFF) that can be added to the start of text files, especially by
+            // some editors on Windows. It corrupts the first header name.
+            if (csvContent.startsWith('\uFEFF')) {
+                csvContent = csvContent.substring(1);
+            }
+            const lines = csvContent.split('\n');
+            if (lines.length < 2 && lines[0].trim() !== '') {
                 throw new Error('CSV must have at least a header row and one data row');
             }
 
@@ -757,6 +771,12 @@ class EnvialiteApp {
 
     async sendEmails() {
         try {
+            // Prevent sending in demo mode
+            if (this.isDemoMode) {
+                this.showStatus('Cannot send emails in Demo Mode.', 'warning');
+                return;
+            }
+
             // Validate SMTP settings before proceeding
             if (!this.validateSmtpSettings()) {
                 return;
@@ -1150,12 +1170,86 @@ class EnvialiteApp {
         }
     }
 
+    // Helper to generate consistent HTML for a data cell
+    _createDataCellHtml(rowIndex, colIndex, content = '') {
+        // Returns the innerHTML for a <td> element
+        return `<div class="cell-content">
+                    <span class="cell-text">${this.escapeHtml(content)}</span>
+                    <button class="delete-row-btn" onclick="window.envialiteApp.deleteRowByIndex(${rowIndex})" title="Delete Row">×</button>
+                </div>`;
+    }
+
+    // Helper to generate consistent HTML for a header cell
+    _createHeaderCellHtml(colIndex, content = '') {
+        // Returns the innerHTML for a <th> element
+        return `<div class="header-content">
+                    <span class="header-text">${this.escapeHtml(content || `Column ${colIndex + 1}`)}</span>
+                    <button class="delete-column-btn" onclick="window.envialiteApp.deleteColumnByIndex(${colIndex})" title="Delete Column">×</button>
+                </div>`;
+    }
+
+    // Updates all delete button onclick handlers to reflect current row/column indices
+    _updateAllDeleteButtonOnclicks() {
+        const table = document.getElementById('dataTable');
+        if (!table) return;
+
+        // Update header delete buttons
+        table.querySelectorAll('thead th').forEach((cell, colIndex) => {
+            const deleteBtn = cell.querySelector('.delete-column-btn');
+            if (deleteBtn) deleteBtn.setAttribute('onclick', `window.envialiteApp.deleteColumnByIndex(${colIndex})`);
+        });
+
+        // Update row delete buttons
+        table.querySelectorAll('tbody tr').forEach((row, rowIndex) => {
+            row.querySelectorAll('td').forEach(cell => {
+                const deleteBtn = cell.querySelector('.delete-row-btn');
+                if (deleteBtn) deleteBtn.setAttribute('onclick', `window.envialiteApp.deleteRowByIndex(${rowIndex})`);
+            });
+        });
+    }
+
+    async checkDemoModeStatus() {
+        try {
+            const response = await fetch('/api/status');
+            if (!response.ok) {
+                throw new Error('Network response was not ok');
+            }
+            const data = await response.json();
+            this.isDemoMode = data.demo_mode;
+
+            if (this.isDemoMode) {
+                const testBtn = document.getElementById('testSmtpBtn');
+                const testResultSpan = document.getElementById('smtpTestResult');
+
+                if (testBtn) {
+                    testBtn.disabled = true;
+                }
+                if (testResultSpan) {
+                    testResultSpan.textContent = 'Connection testing is disabled in Demo Mode.';
+                    testResultSpan.style.color = '#e67e22'; // A nice warning orange
+                }
+
+                this.showStatus('Application is running in Demo Mode. No actual emails will be sent.', 'warning');
+            }
+        } catch (error) {
+            console.error('Error fetching server status:', error);
+        }
+    }
+
     async testSmtpConnection() {
         try {
             this.getSmtpSettings();
 
             if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
                 this.showStatus('Please fill in all SMTP settings', 'error');
+                return;
+            }
+
+            // Prevent actual connection test in demo mode
+            if (this.isDemoMode) {
+                const testResult = document.getElementById('smtpTestResult');
+                testResult.innerHTML = '<span style="color: #e67e22;">Connection testing is disabled in Demo Mode.</span>';
+                this.showStatus('Connection testing is disabled in Demo Mode.', 'warning');
                 return;
             }
 
@@ -1678,7 +1772,7 @@ class EnvialiteApp {
             newCell.contentEditable = 'true';
             newCell.dataset.row = tbody.rows.length;
             newCell.dataset.column = i;
-            newCell.innerHTML = '<div class="cell-content"><span class="cell-text"></span><button class="delete-row-btn" onclick="deleteRowByIndex(' + tbody.rows.length + ')" title="Delete Row">×</button></div>';
+            newCell.innerHTML = this._createDataCellHtml(newRowIndex, i, ''); // Use helper
             newRow.appendChild(newCell);
         }
 
@@ -1711,8 +1805,8 @@ class EnvialiteApp {
         const headerCell = document.createElement('th');
         headerCell.className = 'header-cell';
         headerCell.contentEditable = 'true';
-        headerCell.dataset.column = columnIndex;
-        headerCell.innerHTML = `<div class="header-content"><span class="header-text">Column ${columnIndex + 1}</span><button class="delete-column-btn" onclick="deleteColumnByIndex(${columnIndex})" title="Delete Column">×</button></div>`;
+        headerCell.dataset.column = newColumnIndex;
+        headerCell.innerHTML = this._createHeaderCellHtml(newColumnIndex); // Use helper
         headerRow.appendChild(headerCell);
 
         // Add data cells to each row
@@ -1721,8 +1815,8 @@ class EnvialiteApp {
             dataCell.className = 'data-cell';
             dataCell.contentEditable = 'true';
             dataCell.dataset.row = rowIndex;
-            dataCell.dataset.column = columnIndex;
-            dataCell.textContent = '';
+            dataCell.dataset.column = newColumnIndex;
+            dataCell.innerHTML = this._createDataCellHtml(rowIndex, newColumnIndex, ''); // Use helper
             row.appendChild(dataCell);
         });
 
@@ -1811,8 +1905,8 @@ class EnvialiteApp {
             const headerCell = document.createElement('th');
             headerCell.className = 'header-cell';
             headerCell.contentEditable = 'true';
-            headerCell.dataset.column = index;
-            headerCell.innerHTML = `<div class="header-content"><span class="header-text">${header || `Column ${index + 1}`}</span><button class="delete-column-btn" onclick="deleteColumnByIndex(${index})" title="Delete Column">×</button></div>`;
+            headerCell.dataset.column = index; // Use index for data-column
+            headerCell.innerHTML = this._createHeaderCellHtml(index, header); // Use helper
             headerRow.appendChild(headerCell);
         });
 
@@ -1825,14 +1919,16 @@ class EnvialiteApp {
                 const cell = document.createElement('td');
                 cell.className = 'data-cell';
                 cell.contentEditable = 'true';
-                cell.dataset.row = i - 1;
+                const actualRowIndex = i - 1; // Adjust row index for data rows
+                cell.dataset.row = actualRowIndex;
                 cell.dataset.column = j;
-                cell.innerHTML = `<div class="cell-content"><span class="cell-text">${rowData[j] || ''}</span><button class="delete-row-btn" onclick="deleteRowByIndex(${i - 1})" title="Delete Row">×</button></div>`;
+                cell.innerHTML = this._createDataCellHtml(actualRowIndex, j, rowData[j] || ''); // Use helper
                 row.appendChild(cell);
             }
 
             tbody.appendChild(row);
         }
+        this._updateAllDeleteButtonOnclicks(); // Update all buttons after populating
     }
 
     updateTableFromCSV() {
@@ -1904,8 +2000,10 @@ class EnvialiteApp {
         const headerRow = table.querySelector('thead tr');
 
         // Keep one header and one data row
-        headerRow.innerHTML = '<th contenteditable="true" data-column="0" class="header-cell"><div class="header-content"><span class="header-text">Column 1</span><button class="delete-column-btn" onclick="deleteColumnByIndex(0)" title="Delete Column">×</button></div></th>';
-        tbody.innerHTML = '<tr><td contenteditable="true" data-row="0" data-column="0" class="data-cell"><div class="cell-content"><span class="cell-text"></span><button class="delete-row-btn" onclick="deleteRowByIndex(0)" title="Delete Row">×</button></div></td></tr>';
+        headerRow.innerHTML = ''; // Clear first
+        headerRow.innerHTML = `<th contenteditable="true" data-column="0" class="header-cell">${this._createHeaderCellHtml(0, 'Column 1')}</th>`;
+        tbody.innerHTML = ''; // Clear first
+        tbody.innerHTML = `<tr><td contenteditable="true" data-row="0" data-column="0" class="data-cell">${this._createDataCellHtml(0, 0, '')}</td></tr>`;
 
         this.csvData = '';
         document.getElementById('csvData').value = '';
@@ -1934,7 +2032,7 @@ class EnvialiteApp {
         });
 
         // Update data-column attributes for remaining cells
-        this.updateCellAttributes();
+        this._updateAllDeleteButtonOnclicks(); // Update onclicks after re-indexing
 
         this.updateCSVFromTable();
         this.showStatus('Column deleted', 'success');
@@ -1954,7 +2052,7 @@ class EnvialiteApp {
         tbody.deleteRow(rowIndex);
 
         // Update data-row attributes for remaining rows
-        this.updateRowAttributes();
+        this._updateAllDeleteButtonOnclicks(); // Update onclicks after re-indexing
 
         this.updateCSVFromTable();
         this.showStatus('Row deleted', 'success');

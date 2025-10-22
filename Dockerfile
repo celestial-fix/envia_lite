@@ -17,17 +17,26 @@ COPY index.html .
 COPY styles.css .
 COPY script.js .
 COPY README.md .
+COPY docker-entrypoint.sh .
+
+# Make entrypoint script executable
+RUN chmod +x docker-entrypoint.sh
 
 # Expose port
-EXPOSE 8000
+ARG PORT=8000
+ENV PORT=$PORT
+EXPOSE $PORT
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:${PORT}/ || exit 1
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1
+    PYTHONDONTWRITEBYTECODE=1 \
+    # Set DEMO_MODE to "true" to enable demo mode. Any other value disables it.
+    DEMO_MODE="false"
 
 # Run the application
-CMD ["python", "server.py", "8000"]
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["python", "server.py"]

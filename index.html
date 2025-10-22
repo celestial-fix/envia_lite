@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <header>
-            <h1>📨 Envía</h1>
+            <h1><a href="https://github.com/heavenly-tech/envia_lite">📨</a> Envía</h1>
             <p>Personal Mail Merge Tool</p>
         </header>
 
@@ -52,7 +52,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <button onclick="testSmtpConnection()">🔍 Test Connection</button>
+                        <button id="testSmtpBtn" onclick="testSmtpConnection()">🔍 Test Connection</button>
                         <span id="smtpTestResult" style="margin-left: 10px;"></span>
                     </div>
                 </div>
@@ -178,7 +178,7 @@ Your Company"></textarea>
                                     <th contenteditable="true" data-column="0" class="header-cell">
                                         <div class="header-content">
                                             <span class="header-text">Column 1</span>
-                                            <button class="delete-column-btn" onclick="deleteColumnByIndex(0)" title="Delete Column">×</button>
+                                            <button class="delete-column-btn" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button>
                                         </div>
                                     </th>
                                 </tr>
@@ -188,7 +188,7 @@ Your Company"></textarea>
                                     <td contenteditable="true" data-row="0" data-column="0" class="data-cell">
                                         <div class="cell-content">
                                             <span class="cell-text"></span>
-                                            <button class="delete-row-btn" onclick="deleteRowByIndex(0)" title="Delete Row">×</button>
+                                            <button class="delete-row-btn" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button>
                                         </div>
                                     </td>
                                 </tr>

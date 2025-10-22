@@ -309,8 +309,13 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404)
 
     def do_GET(self):
-        """Handle file requests (index.html, styles.css, script.js)"""
-        # Resolve path relative to where the script is running (or the PyInstaller bundle)
+        """Handle file requests (index.html, etc.) and API calls."""
+        # API endpoint for status
+        if self.path == '/api/status':
+            self.send_json_response({'demo_mode': DEMO_MODE})
+            return
+
+        # Serve static files
         path_to_serve = self.path.lstrip('/')
         if not path_to_serve or path_to_serve == '/':
             path_to_serve = 'index.html'
