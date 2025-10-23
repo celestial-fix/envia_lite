@@ -30,13 +30,12 @@ class EnvialiteApp {
         // SMTP connection status
         this.smtpConnectionTested = false;
         this.smtpConnectionValid = false;
+        this.excludedEmailIndices = new Set(); // Stores indices of emails to be excluded
+        this.isServerInDemoMode = false; // Will be fetched from server
 
         // Preview navigation
         this.currentEmailIndex = 0;
         this.emailPreviews = []; // Store all generated email previews
-
-        // Demo mode
-        this.isDemoMode = false;
 
         this.init();
     }
@@ -47,12 +46,10 @@ class EnvialiteApp {
         this.loadAttachments();
         this.loadSmtpSettings();
 
-        // Check demo mode
-        this.checkDemoModeStatus();
-
         // Set up event listeners
         this.setupEventListeners();
 
+        this.fetchServerStatus();
         // Initialize table editor
         this.initializeTableEditor();
 
@@ -60,10 +57,90 @@ class EnvialiteApp {
     }
 
     setupEventListeners() {
-        // Event listeners for form interactions
-        // No auto-save needed - data persists in localStorage automatically
+        // Add Tab key support for rich text editors
+        document.querySelectorAll('.rich-text-editor').forEach(editor => {
+            editor.addEventListener('keydown', e => {
+                if (e.key === 'Tab') {
+                    // Prevent the default tabbing behavior
+                    e.preventDefault();
+
+                    const selection = window.getSelection();
+                    if (!selection || selection.rangeCount === 0) return;
+
+                    let node = selection.getRangeAt(0).startContainer;
+                    if (node.nodeType === 3) {
+                        node = node.parentNode;
+                    }
+
+                    const listItem = node.closest('li');
+                    if (listItem && editor.contains(listItem)) {
+                        // We are inside a list item, so indent or outdent
+                        document.execCommand(e.shiftKey ? 'outdent' : 'indent', false, null);
+                    } else {
+                        // We are not in a list, so insert a tab space if Shift is not pressed
+                        if (!e.shiftKey) {
+                            document.execCommand('insertHTML', false, '&emsp;');
+                        }
+                    }
+                }
+            });
+        });
     }
 
+    async fetchServerStatus() {
+        try {
+            const response = await fetch('/api/status');
+            if (!response.ok) {
+                throw new Error('Server status endpoint not found.');
+            }
+            const data = await response.json();
+            this.isServerInDemoMode = data.demoMode;
+
+            const indicator = document.getElementById('demoModeIndicator');
+            if (this.isServerInDemoMode) {
+                console.log('Server is in DEMO MODE.');
+                if (indicator) indicator.style.display = 'inline-block';
+            } else {
+                if (indicator) indicator.style.display = 'none';
+            }
+        } catch (error) {
+            console.error('Could not fetch server status:', error);
+        }
+    }
+
+    saveData() {
+        try {
+            // Ensure instance variables are up-to-date from the form fields
+            this.getFormData();
+            // Ensure CSV data is updated from the table editor
+            this.updateCSVFromTable();
+
+            const dataToSave = {
+                // Email composition data
+                fromName: this.fromName,
+                fromEmail: this.fromEmail,
+                toEmail: this.toEmail,
+                ccEmail: this.ccEmail,
+                bccEmail: this.bccEmail,
+                emailSubject: this.emailSubject,
+                emailBody: this.emailBody,
+
+                // CSV data from table editor
+                csvData: this.csvData,
+
+                // Attachment settings
+                variableAttachments: this.variableAttachments,
+                attachmentDelimiter: this.attachmentDelimiter,
+            };
+
+            dataToSave.excludedEmailIndices = Array.from(this.excludedEmailIndices);
+            localStorage.setItem('envialite_data', JSON.stringify(dataToSave));
+            this.showStatus('Data saved successfully!', 'success');
+        } catch (error) {
+            console.error('Error saving data:', error);
+            this.showStatus('Failed to save data.', 'error');
+        }
+    }
 
 
     loadData() {
@@ -79,7 +156,7 @@ class EnvialiteApp {
                 document.getElementById('ccEmail').value = data.ccEmail || '';
                 document.getElementById('bccEmail').value = data.bccEmail || '';
                 document.getElementById('emailSubject').value = data.emailSubject || '';
-                document.getElementById('emailBody').value = data.emailBody || '';
+                document.getElementById('emailBody').innerHTML = data.emailBody || '';
 
                 // Load CSV data
                 document.getElementById('csvData').value = data.csvData || '';
@@ -89,6 +166,7 @@ class EnvialiteApp {
                 document.getElementById('attachmentDelimiter').value = data.attachmentDelimiter || '';
 
                 // Update instance variables
+                this.fromName = data.fromName || '';
                 this.fromEmail = data.fromEmail || '';
                 this.toEmail = data.toEmail || '';
                 this.ccEmail = data.ccEmail || '';
@@ -99,6 +177,7 @@ class EnvialiteApp {
                 this.variableAttachments = data.variableAttachments || '';
                 this.attachmentDelimiter = data.attachmentDelimiter || ';';
 
+                this.excludedEmailIndices = new Set(data.excludedEmailIndices || []);
                 this.showStatus('Data loaded from browser', 'success');
             }
         } catch (error) {
@@ -108,16 +187,8 @@ class EnvialiteApp {
 
     parseCSV() {
         try {
-            let csvContent = this.csvData.trim();
-
-            // Remove Byte Order Mark (BOM) if present. The BOM is an invisible character
-            // (U+FEFF) that can be added to the start of text files, especially by
-            // some editors on Windows. It corrupts the first header name.
-            if (csvContent.startsWith('\uFEFF')) {
-                csvContent = csvContent.substring(1);
-            }
-            const lines = csvContent.split('\n');
-            if (lines.length < 2 && lines[0].trim() !== '') {
+            const lines = this.csvData.trim().split('\n');
+            if (lines.length < 2) {
                 throw new Error('CSV must have at least a header row and one data row');
             }
 
@@ -171,7 +242,9 @@ class EnvialiteApp {
 
     async previewEmails() {
         try {
+            // Get the latest form data every time a preview is requested
             this.getFormData();
+
             this.parseCSV();
 
             if (this.recipients.length === 0) {
@@ -187,7 +260,6 @@ class EnvialiteApp {
             this.showCurrentEmailPreview();
 
             document.getElementById('previewSection').style.display = 'block';
-            document.getElementById('resultsSection').style.display = 'none';
 
             this.showStatus(`Preview generated for ${this.recipients.length} emails`, 'success');
 
@@ -198,9 +270,13 @@ class EnvialiteApp {
 
     generateEmailPreviews() {
         this.emailPreviews = [];
+        this.excludedEmailIndices.clear(); // Clear exclusions when new previews are generated
 
         // Initialize currentPreviewAttachments as empty Map
         this.currentPreviewAttachments = new Map();
+
+        // Ensure we have the latest SMTP settings for fallback logic
+        this.getSmtpSettings();
 
         // Check if SMTP username is a valid email for fallback
         const smtpEmailFallback = this.isValidEmail(this.smtpUser) ? this.smtpUser : null;
@@ -209,7 +285,10 @@ class EnvialiteApp {
         }
 
         this.recipients.forEach((recipient, index) => {
-            let mergedFrom = this.mergeTemplate(this.fromEmail, recipient);
+            // Merge both the From Name and From Email templates
+            const mergedFromName = this.mergeTemplate(this.fromName, recipient);
+            let mergedFromEmail = this.mergeTemplate(this.fromEmail, recipient);
+
             const mergedTo = this.mergeTemplate(this.toEmail, recipient);
             const mergedCc = this.mergeTemplate(this.ccEmail, recipient);
             const mergedBcc = this.mergeTemplate(this.bccEmail, recipient);
@@ -217,9 +296,15 @@ class EnvialiteApp {
             const mergedBody = this.mergeTemplate(this.emailBody, recipient);
 
             // Use SMTP username as fallback if no From email is provided
-            if (!mergedFrom && smtpEmailFallback) {
-                mergedFrom = smtpEmailFallback;
+            if (!mergedFromEmail && smtpEmailFallback) {
+                mergedFromEmail = smtpEmailFallback;
                 console.log(`Using SMTP username as From email for recipient ${index + 1}`);
+            }
+
+            // Construct the final 'From' string, e.g., "John Doe <email@example.com>"
+            let finalFrom = mergedFromEmail;
+            if (mergedFromName) {
+                finalFrom = `"${mergedFromName.replace(/"/g, '\\"')}" <${mergedFromEmail}>`;
             }
 
             // Get attachments for this email (without emailIndex to avoid preview-specific logic)
@@ -228,7 +313,9 @@ class EnvialiteApp {
             this.emailPreviews.push({
                 index: index,
                 recipient: recipient,
-                from: mergedFrom,
+                fromName: mergedFromName, // Store name part
+                fromEmail: mergedFromEmail, // Store email part
+                from: finalFrom,
                 to: mergedTo,
                 cc: mergedCc,
                 bcc: mergedBcc,
@@ -247,6 +334,23 @@ class EnvialiteApp {
         const prevBtn = document.getElementById('prevEmail');
         const nextBtn = document.getElementById('nextEmail');
         const emailCounter = document.getElementById('emailCounter');
+        const previewContent = document.getElementById('previewContent');
+
+        // Update Exclude button state and preview appearance
+        const excludeBtn = document.getElementById('excludeEmailBtn');
+        if (this.excludedEmailIndices.has(this.currentEmailIndex)) {
+            // If it's excluded, the button should offer to "Include" it (green)
+            excludeBtn.textContent = '✅ Include';
+            excludeBtn.classList.add('btn-included');
+            excludeBtn.classList.remove('btn-exclude');
+            previewContent.classList.add('excluded-preview');
+        } else {
+            // If it's included, the button should offer to "Exclude" it (yellow)
+            excludeBtn.textContent = '❌ Exclude';
+            excludeBtn.classList.remove('btn-included');
+            excludeBtn.classList.add('btn-exclude');
+            previewContent.classList.remove('excluded-preview');
+        }
 
         prevBtn.disabled = this.currentEmailIndex === 0;
         nextBtn.disabled = this.currentEmailIndex === this.emailPreviews.length - 1;
@@ -263,6 +367,7 @@ class EnvialiteApp {
         }
 
         emailCounter.textContent = counterText;
+        this.updateSentMessagesList(); // Update the list of messages to be sent
 
         // Populate editable fields with merged content (variables replaced)
         this.populateEditablePreview(preview);
@@ -360,12 +465,13 @@ class EnvialiteApp {
     }
 
     populateEditablePreview(preview) {
-        document.getElementById('previewFrom').value = preview.from || '';
+        document.getElementById('previewFromName').value = preview.fromName || '';
+        document.getElementById('previewFrom').value = preview.fromEmail || '';
         document.getElementById('previewTo').value = preview.to || '';
         document.getElementById('previewCc').value = preview.cc || '';
         document.getElementById('previewBcc').value = preview.bcc || '';
         document.getElementById('previewSubject').value = preview.subject || '';
-        document.getElementById('previewBody').value = preview.body || '';
+        document.getElementById('previewBody').innerHTML = preview.body || '';
     }
 
 
@@ -380,6 +486,7 @@ class EnvialiteApp {
         document.getElementById('previewCc').value = original.cc || '';
         document.getElementById('previewBcc').value = original.bcc || '';
         document.getElementById('previewSubject').value = original.subject || '';
+        document.getElementById('previewBody').innerHTML = original.body || '';
         document.getElementById('previewBody').value = original.body || '';
 
         // Reset attachments
@@ -389,7 +496,60 @@ class EnvialiteApp {
         });
         this.displayPreviewAttachments();
 
+        this.excludedEmailIndices.clear(); // Clear exclusions when resetting
         this.showStatus('Preview reset to original', 'success');
+    }
+
+    toggleExcludeEmail() {
+        if (this.excludedEmailIndices.has(this.currentEmailIndex)) {
+            this.excludedEmailIndices.delete(this.currentEmailIndex);
+            this.showStatus(`Email ${this.currentEmailIndex + 1} included in merge.`, 'success');
+        } else {
+            this.excludedEmailIndices.add(this.currentEmailIndex);
+            this.showStatus(`Email ${this.currentEmailIndex + 1} excluded from merge.`, 'success');
+        }
+        this.showCurrentEmailPreview(); // Refresh button state and list
+        this.updateSentMessagesList();
+        this.saveData(); // Persist exclusion state
+    }
+
+    updateSentMessagesList() {
+        const sentMessagesListDiv = document.getElementById('sentMessagesList');
+        if (!sentMessagesListDiv) return;
+
+        if (this.emailPreviews.length === 0) {
+            sentMessagesListDiv.textContent = 'No messages to send.';
+            return;
+        }
+
+        const includedIndices = [];
+        for (let i = 0; i < this.emailPreviews.length; i++) {
+            if (!this.excludedEmailIndices.has(i)) {
+                includedIndices.push(i + 1); // +1 for 1-based indexing
+            }
+        }
+
+        if (includedIndices.length === 0) {
+            sentMessagesListDiv.textContent = 'Sending: No messages selected.';
+            return;
+        }
+
+        let ranges = [];
+        let start = includedIndices[0];
+        let end = includedIndices[0];
+
+        for (let i = 1; i < includedIndices.length; i++) {
+            if (includedIndices[i] === end + 1) {
+                end = includedIndices[i];
+            } else {
+                ranges.push(start === end ? `${start}` : `${start}-${end}`);
+                start = includedIndices[i];
+                end = includedIndices[i];
+            }
+        }
+        ranges.push(start === end ? `${start}` : `${start}-${end}`);
+
+        sentMessagesListDiv.textContent = `Sending: ${ranges.join(', ')}`;
     }
 
     updateCSVFromPreviewChanges(preview) {
@@ -771,9 +931,19 @@ class EnvialiteApp {
 
     async sendEmails() {
         try {
-            // Prevent sending in demo mode
-            if (this.isDemoMode) {
-                this.showStatus('Cannot send emails in Demo Mode.', 'warning');
+            // If server is in demo mode, show a message and exit.
+            if (this.isServerInDemoMode) {
+                this.showStatus('Emails will not be sent because the server is in Demo Mode.', 'success');
+                return;
+            }
+
+            this.setLoading(true);
+
+            // Perform a silent connection test before sending
+            const testResult = await this._testSmtpConnectionInternal();
+            if (!testResult.success) {
+                this.setLoading(false);
+                this.showStatus(`SMTP Connection Failed: ${testResult.error}. Please check your Account settings.`, 'error');
                 return;
             }
 
@@ -806,6 +976,7 @@ class EnvialiteApp {
             }
 
         } catch (error) {
+            // This catch block will now primarily handle errors from the sending process itself
             this.setLoading(false);
             this.showStatus(`Error sending emails: ${error.message}`, 'error');
         }
@@ -813,8 +984,6 @@ class EnvialiteApp {
 
     async sendFromPreviewData() {
         try {
-            this.setLoading(true);
-
             // Get SMTP settings
             this.getSmtpSettings();
 
@@ -832,7 +1001,7 @@ class EnvialiteApp {
             }
 
             // Create individual email data for each recipient with their specific attachments
-            const emailsData = this.emailPreviews.map((preview, index) => {
+            const emailsData = this.emailPreviews.filter((_, index) => !this.excludedEmailIndices.has(index)).map((preview, index) => {
                 // Get attachments specifically for this email
                 const emailAttachments = this.getAttachmentsForEmail(preview.recipient, index);
 
@@ -871,7 +1040,7 @@ class EnvialiteApp {
             const fromEmail = firstEmail.from || this.fromEmail || '';
 
             // Debug logging
-            console.log('DEBUG: Sending emails from preview data:', {
+            console.log('DEBUG: Sending emails from preview data (filtered):', {
                 recipientsCount: this.recipients.length,
                 previewCount: this.emailPreviews.length,
                 templateLength: template.length,
@@ -931,14 +1100,14 @@ class EnvialiteApp {
             this.setLoading(false);
 
             if (result.success) {
+                this.setLoading(false);
                 // Store results in each preview object for status display
-                this.storeSendResults(result.results);
+                this.storeSendResults(result.results); // This will only contain results for sent emails
                 this.refreshPreviewDisplay();
-                this.showStatus(result.summary, 'success');
-
-                // Hide results section since we show status in preview
-                document.getElementById('resultsSection').style.display = 'none';
+                this.displayResults(result.results, result.summary);
+                showTab('results'); // Switch to the new results tab
             } else {
+                this.setLoading(false);
                 this.showStatus(result.error, 'error');
             }
 
@@ -1024,10 +1193,10 @@ class EnvialiteApp {
 
         // Summary
         const summaryDiv = document.createElement('div');
-        summaryDiv.className = 'result-item success';
+        summaryDiv.className = 'result-summary-item';
         summaryDiv.innerHTML = `<div class="result-summary"><strong>${summary}</strong></div>`;
         resultsContent.appendChild(summaryDiv);
-
+        
         // Individual results
         results.forEach(result => {
             const resultDiv = document.createElement('div');
@@ -1046,9 +1215,6 @@ class EnvialiteApp {
 
             resultsContent.appendChild(resultDiv);
         });
-
-        document.getElementById('resultsSection').style.display = 'block';
-        document.getElementById('previewSection').style.display = 'none';
     }
 
     getFormData() {
@@ -1059,7 +1225,7 @@ class EnvialiteApp {
         this.ccEmail = document.getElementById('ccEmail').value;
         this.bccEmail = document.getElementById('bccEmail').value;
         this.emailSubject = document.getElementById('emailSubject').value;
-        this.emailBody = document.getElementById('emailBody').value;
+        this.emailBody = document.getElementById('emailBody').innerHTML;
 
         // Get CSV data
         this.csvData = document.getElementById('csvData').value;
@@ -1170,86 +1336,20 @@ class EnvialiteApp {
         }
     }
 
-    // Helper to generate consistent HTML for a data cell
-    _createDataCellHtml(rowIndex, colIndex, content = '') {
-        // Returns the innerHTML for a <td> element
-        return `<div class="cell-content">
-                    <span class="cell-text">${this.escapeHtml(content)}</span>
-                    <button class="delete-row-btn" onclick="window.envialiteApp.deleteRowByIndex(${rowIndex})" title="Delete Row">×</button>
-                </div>`;
-    }
-
-    // Helper to generate consistent HTML for a header cell
-    _createHeaderCellHtml(colIndex, content = '') {
-        // Returns the innerHTML for a <th> element
-        return `<div class="header-content">
-                    <span class="header-text">${this.escapeHtml(content || `Column ${colIndex + 1}`)}</span>
-                    <button class="delete-column-btn" onclick="window.envialiteApp.deleteColumnByIndex(${colIndex})" title="Delete Column">×</button>
-                </div>`;
-    }
-
-    // Updates all delete button onclick handlers to reflect current row/column indices
-    _updateAllDeleteButtonOnclicks() {
-        const table = document.getElementById('dataTable');
-        if (!table) return;
-
-        // Update header delete buttons
-        table.querySelectorAll('thead th').forEach((cell, colIndex) => {
-            const deleteBtn = cell.querySelector('.delete-column-btn');
-            if (deleteBtn) deleteBtn.setAttribute('onclick', `window.envialiteApp.deleteColumnByIndex(${colIndex})`);
-        });
-
-        // Update row delete buttons
-        table.querySelectorAll('tbody tr').forEach((row, rowIndex) => {
-            row.querySelectorAll('td').forEach(cell => {
-                const deleteBtn = cell.querySelector('.delete-row-btn');
-                if (deleteBtn) deleteBtn.setAttribute('onclick', `window.envialiteApp.deleteRowByIndex(${rowIndex})`);
-            });
-        });
-    }
-
-    async checkDemoModeStatus() {
-        try {
-            const response = await fetch('/api/status');
-            if (!response.ok) {
-                throw new Error('Network response was not ok');
-            }
-            const data = await response.json();
-            this.isDemoMode = data.demo_mode;
-
-            if (this.isDemoMode) {
-                const testBtn = document.getElementById('testSmtpBtn');
-                const testResultSpan = document.getElementById('smtpTestResult');
-
-                if (testBtn) {
-                    testBtn.disabled = true;
-                }
-                if (testResultSpan) {
-                    testResultSpan.textContent = 'Connection testing is disabled in Demo Mode.';
-                    testResultSpan.style.color = '#e67e22'; // A nice warning orange
-                }
-
-                this.showStatus('Application is running in Demo Mode. No actual emails will be sent.', 'warning');
-            }
-        } catch (error) {
-            console.error('Error fetching server status:', error);
-        }
-    }
-
     async testSmtpConnection() {
         try {
             this.getSmtpSettings();
 
-            if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
-                this.showStatus('Please fill in all SMTP settings', 'error');
+            // If server is in demo mode, simulate a successful connection.
+            if (this.isServerInDemoMode) {
+                const testResult = document.getElementById('smtpTestResult');
+                testResult.innerHTML = '<span style="color: #28a745;">Demo Mode will not test connections</span>';
+                this.showStatus('SMTP connection is in demo mode.', 'success');
                 return;
             }
 
-            // Prevent actual connection test in demo mode
-            if (this.isDemoMode) {
-                const testResult = document.getElementById('smtpTestResult');
-                testResult.innerHTML = '<span style="color: #e67e22;">Connection testing is disabled in Demo Mode.</span>';
-                this.showStatus('Connection testing is disabled in Demo Mode.', 'warning');
+            if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
+                this.showStatus('Please fill in all SMTP settings', 'error');
                 return;
             }
 
@@ -1306,6 +1406,45 @@ class EnvialiteApp {
         }
     }
 
+    async _testSmtpConnectionInternal() {
+        this.getSmtpSettings();
+
+        if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
+            return { success: false, error: 'Please fill in all SMTP settings.' };
+        }
+
+        // In server demo mode, the test endpoint will simulate success, so we just call it.
+
+        try {
+            const response = await fetch('/test-smtp', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    smtpServer: this.smtpServer,
+                    smtpPort: this.smtpPort,
+                    smtpUser: this.smtpUser,
+                    smtpPassword: this.smtpPassword
+                })
+            });
+
+            if (!response.ok) {
+                return { success: false, error: `Server returned an error: ${response.statusText}` };
+            }
+
+            const result = await response.json();
+
+            // Update connection status flags for other parts of the app
+            this.smtpConnectionTested = true;
+            this.smtpConnectionValid = result.success;
+
+            return result; // Expected: { success: boolean, error?: string }
+        } catch (error) {
+            this.smtpConnectionTested = true;
+            this.smtpConnectionValid = false;
+            return { success: false, error: `A network error occurred: ${error.message}` };
+        }
+    }
+
     validateSmtpSettings() {
         // Get current SMTP settings
         const smtpServerField = document.getElementById('smtpServer');
@@ -1331,12 +1470,6 @@ class EnvialiteApp {
         // Check if SMTP password is configured
         if (!smtpPassword) {
             this.showStatus('Please enter your SMTP password in the Settings tab before sending emails.', 'error');
-            return false;
-        }
-
-        // Check if SMTP connection has been tested and is valid
-        if (!this.smtpConnectionTested || !this.smtpConnectionValid) {
-            this.showStatus('Please test your SMTP connection first using the "Test Connection" button in the Settings tab before sending emails.', 'error');
             return false;
         }
 
@@ -1668,8 +1801,8 @@ class EnvialiteApp {
 
         const cell = e.target;
         const table = document.getElementById('dataTable');
-        let row = cell.closest('tr');
-        let cellIndex = Array.from(row.cells).indexOf(cell);
+        const activeCell = cell.closest('td, th');
+        if (!activeCell) return;
 
         switch (e.key) {
             case 'Tab':
@@ -1678,27 +1811,27 @@ class EnvialiteApp {
                 break;
             case 'Enter':
                 e.preventDefault();
-                if (cell.classList.contains('header-cell')) {
-                    this.moveToNextRow(cell);
+                if (activeCell.classList.contains('header-cell')) {
+                    this.moveToNextRow(activeCell);
                 } else {
-                    this.moveToNextCell(cell, 1);
+                    this.moveToNextCell(activeCell, 1);
                 }
                 break;
             case 'ArrowUp':
                 e.preventDefault();
-                this.moveToAdjacentCell(cell, -1, 'row');
+                this.moveToAdjacentCell(activeCell, -1, 'row');
                 break;
             case 'ArrowDown':
                 e.preventDefault();
-                this.moveToAdjacentCell(cell, 1, 'row');
+                this.moveToAdjacentCell(activeCell, 1, 'row');
                 break;
             case 'ArrowLeft':
                 e.preventDefault();
-                this.moveToAdjacentCell(cell, -1, 'cell');
+                this.moveToAdjacentCell(activeCell, -1, 'cell');
                 break;
             case 'ArrowRight':
                 e.preventDefault();
-                this.moveToAdjacentCell(cell, 1, 'cell');
+                this.moveToAdjacentCell(activeCell, 1, 'cell');
                 break;
             case 'Escape':
                 cell.classList.remove('editing');
@@ -1769,10 +1902,9 @@ class EnvialiteApp {
         for (let i = 0; i < headerCount; i++) {
             const newCell = document.createElement('td');
             newCell.className = 'data-cell';
-            newCell.contentEditable = 'true';
             newCell.dataset.row = tbody.rows.length;
             newCell.dataset.column = i;
-            newCell.innerHTML = this._createDataCellHtml(newRowIndex, i, ''); // Use helper
+            newCell.innerHTML = '<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(' + tbody.rows.length + ')" title="Delete Row">×</button></div>';
             newRow.appendChild(newCell);
         }
 
@@ -1804,19 +1936,17 @@ class EnvialiteApp {
         // Add header cell
         const headerCell = document.createElement('th');
         headerCell.className = 'header-cell';
-        headerCell.contentEditable = 'true';
-        headerCell.dataset.column = newColumnIndex;
-        headerCell.innerHTML = this._createHeaderCellHtml(newColumnIndex); // Use helper
+        headerCell.dataset.column = columnIndex;
+        headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">Column ${columnIndex + 1}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${columnIndex})" title="Delete Column">×</button></div>`;
         headerRow.appendChild(headerCell);
 
         // Add data cells to each row
         Array.from(tbody.rows).forEach((row, rowIndex) => {
             const dataCell = document.createElement('td');
             dataCell.className = 'data-cell';
-            dataCell.contentEditable = 'true';
             dataCell.dataset.row = rowIndex;
-            dataCell.dataset.column = newColumnIndex;
-            dataCell.innerHTML = this._createDataCellHtml(rowIndex, newColumnIndex, ''); // Use helper
+            dataCell.dataset.column = columnIndex;
+            dataCell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${rowIndex})" title="Delete Row">×</button></div>`;
             row.appendChild(dataCell);
         });
 
@@ -1904,9 +2034,8 @@ class EnvialiteApp {
         headers.forEach((header, index) => {
             const headerCell = document.createElement('th');
             headerCell.className = 'header-cell';
-            headerCell.contentEditable = 'true';
-            headerCell.dataset.column = index; // Use index for data-column
-            headerCell.innerHTML = this._createHeaderCellHtml(index, header); // Use helper
+            headerCell.dataset.column = index;
+            headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">${header || `Column ${index + 1}`}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${index})" title="Delete Column">×</button></div>`;
             headerRow.appendChild(headerCell);
         });
 
@@ -1918,17 +2047,14 @@ class EnvialiteApp {
             for (let j = 0; j < headers.length; j++) {
                 const cell = document.createElement('td');
                 cell.className = 'data-cell';
-                cell.contentEditable = 'true';
-                const actualRowIndex = i - 1; // Adjust row index for data rows
-                cell.dataset.row = actualRowIndex;
+                cell.dataset.row = i - 1;
                 cell.dataset.column = j;
-                cell.innerHTML = this._createDataCellHtml(actualRowIndex, j, rowData[j] || ''); // Use helper
+                cell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true">${rowData[j] || ''}</span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${i - 1})" title="Delete Row">×</button></div>`;
                 row.appendChild(cell);
             }
 
             tbody.appendChild(row);
         }
-        this._updateAllDeleteButtonOnclicks(); // Update all buttons after populating
     }
 
     updateTableFromCSV() {
@@ -1999,11 +2125,9 @@ class EnvialiteApp {
         const tbody = table.querySelector('tbody');
         const headerRow = table.querySelector('thead tr');
 
-        // Keep one header and one data row
-        headerRow.innerHTML = ''; // Clear first
-        headerRow.innerHTML = `<th contenteditable="true" data-column="0" class="header-cell">${this._createHeaderCellHtml(0, 'Column 1')}</th>`;
-        tbody.innerHTML = ''; // Clear first
-        tbody.innerHTML = `<tr><td contenteditable="true" data-row="0" data-column="0" class="data-cell">${this._createDataCellHtml(0, 0, '')}</td></tr>`;
+        // Keep one header and one data row, update onclick and tabindex handlers
+        headerRow.innerHTML = '<th data-column="0" class="header-cell"><div class="header-content"><span class="header-text" contenteditable="true">Column 1</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button></div></th>';
+        tbody.innerHTML = '<tr><td data-row="0" data-column="0" class="data-cell"><div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button></div></td></tr>';
 
         this.csvData = '';
         document.getElementById('csvData').value = '';
@@ -2032,7 +2156,7 @@ class EnvialiteApp {
         });
 
         // Update data-column attributes for remaining cells
-        this._updateAllDeleteButtonOnclicks(); // Update onclicks after re-indexing
+        this.updateCellAttributes();
 
         this.updateCSVFromTable();
         this.showStatus('Column deleted', 'success');
@@ -2052,7 +2176,7 @@ class EnvialiteApp {
         tbody.deleteRow(rowIndex);
 
         // Update data-row attributes for remaining rows
-        this._updateAllDeleteButtonOnclicks(); // Update onclicks after re-indexing
+        this.updateRowAttributes();
 
         this.updateCSVFromTable();
         this.showStatus('Row deleted', 'success');
@@ -2118,16 +2242,10 @@ function showTab(tabName) {
         if (tabName === 'preview' && window.envialiteApp) {
             // Only generate if we don't have previews yet or if CSV data has changed
             if (window.envialiteApp.emailPreviews.length === 0) {
-                try {
-                    window.envialiteApp.getFormData();
-                    window.envialiteApp.parseCSV();
-
-                    if (window.envialiteApp.recipients.length > 0) {
-                        window.envialiteApp.generateEmailPreviews();
-                        window.envialiteApp.currentEmailIndex = 0;
-                        window.envialiteApp.showCurrentEmailPreview();
-                        window.envialiteApp.showStatus(`Preview generated for ${window.envialiteApp.recipients.length} emails`, 'success');
-                    }
+                try { 
+                    // The previewEmails function will handle getting data and generating previews
+                    // This is triggered by the onclick in the HTML, so we just need to ensure
+                    // the tab shows. The logic here is simplified as the button handles the action.
                 } catch (error) {
                     console.error('Auto-preview generation failed:', error);
                 }
@@ -2148,6 +2266,10 @@ function previewEmails() {
 
 function sendEmails() {
     window.envialiteApp.sendEmails();
+}
+
+function saveData() {
+    window.envialiteApp.saveData();
 }
 
 
@@ -2174,6 +2296,10 @@ function testSmtpConnection() {
 
 function navigateEmail(direction) {
     window.envialiteApp.navigateEmail(direction);
+}
+
+function toggleExcludeEmail() {
+    window.envialiteApp.toggleExcludeEmail();
 }
 
 function addAttachmentFromPicker() {
@@ -2215,6 +2341,11 @@ function deleteColumnByIndex(columnIndex) {
 
 function deleteRowByIndex(rowIndex) {
     window.envialiteApp.deleteRowByIndex(rowIndex);
+}
+
+// Rich Text Editor command
+function formatDoc(command, value = null) {
+    document.execCommand(command, false, value);
 }
 
 // Preview Editor Global Functions

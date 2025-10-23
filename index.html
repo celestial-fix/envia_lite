@@ -9,7 +9,8 @@
 <body>
     <div class="container">
         <header>
-            <h1><a href="https://github.com/heavenly-tech/envia_lite">📨</a> Envía</h1>
+            <span id="demoModeIndicator" class="demo-indicator" style="display: none;">DEMO</span>
+            <h1>📨 Envía</h1>
             <p>Personal Mail Merge Tool</p>
         </header>
 
@@ -20,6 +21,7 @@
             <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
             <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
             <button class="tab-btn" onclick="showTab('preview'); previewEmails();">👁️ Preview</button>
+            <button id="resultsTabBtn" class="tab-btn" onclick="showTab('results')">📈 Results</button>
         </div>
 
         <!-- Tab Content Cards -->
@@ -52,7 +54,7 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <button id="testSmtpBtn" onclick="testSmtpConnection()">🔍 Test Connection</button>
+                        <button onclick="testSmtpConnection()">🔍 Test Connection</button>
                         <span id="smtpTestResult" style="margin-left: 10px;"></span>
                     </div>
                 </div>
@@ -64,6 +66,7 @@
         <div id="template" class="tab-card">
             <div class="card-header">
                 <h2>📝 Email Composition</h2>
+                <button onclick="saveData()" class="btn-small btn-save" title="Save Template Data">💾 Save</button>
             </div>
             <div class="card-content">
                 <!-- Email Headers -->
@@ -111,14 +114,18 @@
                     <h3>📝 Message Body</h3>
                     <div class="form-group">
                         <label for="emailBody">Email Content (HTML allowed):</label>
-                        <textarea id="emailBody" rows="10" placeholder="Hi {{name}},
-
-Thank you for your interest in {{product}}.
-
-We will contact you within {{timeframe}}.
-
+                        <div class="editor-toolbar">
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>B</b></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>I</i></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>U</u></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('insertUnorderedList')">●</button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('insertOrderedList')">1.</button>
+                        </div>
+                        <div id="emailBody" class="rich-text-editor" contenteditable="true" placeholder="Hi {{name}},
+Thank you for your interest in {{product}}. We will contact you within {{timeframe}}.
 Best regards,
-Your Company"></textarea>
+Your Company">
+                        </div>
                     </div>
                 </div>
 
@@ -165,6 +172,7 @@ Your Company"></textarea>
                     <div class="control-group">
                         <button onclick="pasteFromClipboard()" class="btn-small" title="Paste from Clipboard">📋 Paste</button>
                         <button onclick="exportToCSV()" class="btn-small" title="Export to CSV">📤 Export</button>
+                        <button onclick="saveData()" class="btn-small btn-save" title="Save Data">💾 Save</button>
                         <button onclick="clearTable()" class="btn-small btn-delete" title="Clear Table">🗑️ Clear</button>
                     </div>
                 </div>
@@ -175,20 +183,20 @@ Your Company"></textarea>
                         <table id="dataTable" class="data-table">
                             <thead>
                                 <tr>
-                                    <th contenteditable="true" data-column="0" class="header-cell">
+                                    <th data-column="0" class="header-cell">
                                         <div class="header-content">
-                                            <span class="header-text">Column 1</span>
-                                            <button class="delete-column-btn" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button>
+                                            <span class="header-text" contenteditable="true">Column 1</span>
+                                            <button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button>
                                         </div>
                                     </th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr>
-                                    <td contenteditable="true" data-row="0" data-column="0" class="data-cell">
+                                    <td data-row="0" data-column="0" class="data-cell">
                                         <div class="cell-content">
-                                            <span class="cell-text"></span>
-                                            <button class="delete-row-btn" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button>
+                                            <span class="cell-text" contenteditable="true"></span> 
+                                            <button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -225,11 +233,16 @@ Your Company"></textarea>
                         <input type="file" id="fileUpload" multiple />
                         <small>Supported formats: PDF, DOC, DOCX, TXT, JPG, PNG (max 10MB per file)</small>
                     </div>
-                    <button onclick="uploadFiles()">📤 Upload Files</button>
+                    <div class="control-group">
+                        <button onclick="uploadFiles()">📤 Upload Files</button>
+                    </div>
                 </div>
 
                 <div class="attachments-list" id="attachmentsList">
-                    <h3>📋 Uploaded Files</h3>
+                    <div class="attachments-list-header">
+                        <h3>📋 Uploaded Files</h3>
+                        <button onclick="clearAllAttachments()" class="btn-small btn-delete" title="Clear All Attachments">🗑️ Clear All</button>
+                    </div>
                     <div id="attachmentsContent">No files uploaded yet</div>
                 </div>
 
@@ -244,7 +257,6 @@ Your Company"></textarea>
                 <div class="actions-section">
                     <button id="resetBtn" onclick="resetPreviewToOriginal()" class="btn-delete">↩️ Reset</button>
                     <button id="sendBtn" onclick="sendEmails()">🚀 Send Emails</button>
-                    <button id="loadBtn" onclick="loadData()">📂 Load Data</button>
                 </div>
 
                 <div class="preview-section" id="previewSection" style="display: none;">
@@ -252,7 +264,11 @@ Your Company"></textarea>
                     <div class="preview-navigation">
                         <button id="prevEmail" onclick="navigateEmail(-1)" disabled>⬅️ Previous</button>
                         <span id="emailCounter">Email 1 of 1</span>
+                        <button id="excludeEmailBtn" onclick="toggleExcludeEmail()" class="btn-small btn-exclude">Exclude</button>
                         <button id="nextEmail" onclick="navigateEmail(1)" disabled>➡️ Next</button>
+                    </div>
+                    <div class="sent-messages-list">
+                        <span id="sentMessagesList">Sending: All messages</span>
                     </div>
 
                     <!-- Editable Email Preview -->
@@ -295,7 +311,15 @@ Your Company"></textarea>
                             <!-- Message Body (Editable) -->
                             <div class="preview-field-group">
                                 <label>Message:</label>
-                                <textarea id="previewBody" class="preview-textarea" rows="12"></textarea>
+                                <div class="editor-toolbar">
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>B</b></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>I</i></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>U</u></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('insertUnorderedList')">●</button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('insertOrderedList')">1.</button>
+                                </div>
+                                <div id="previewBody" class="rich-text-editor" contenteditable="true">
+                                </div>
                             </div>
 
                             <!-- Attachments Section -->
@@ -320,9 +344,17 @@ Your Company"></textarea>
                     </div>
                 </div>
 
-                <div class="results-section" id="resultsSection" style="display: none;">
-                    <h3>📊 Send Results</h3>
-                    <div id="resultsContent"></div>
+            </div>
+        </div>
+
+        <!-- Results Tab -->
+        <div id="results" class="tab-card">
+            <div class="card-header">
+                <h2>📈 Send Results</h2>
+            </div>
+            <div class="card-content">
+                <div id="resultsContent">
+                    <p style="color: #666; font-style: italic;">Send emails from the "Preview" tab to see the results here.</p>
                 </div>
             </div>
         </div>

@@ -242,80 +242,122 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
         self.end_headers()
 
     def do_POST(self):
+        # This endpoint is now handled by do_GET
+        if self.path == '/api/status':
+            self.send_error(405, "Method Not Allowed")
+            return
         if self.path == '/send-emails':
             try:
                 content_length = int(self.headers['Content-Length'])
                 post_data = self.rfile.read(content_length)
                 data = json.loads(post_data.decode('utf-8'))
-                
-                # Extract and process data
-                recipients = data.get('recipients', [])
-                subject_template = data.get('subject', '')
-                body_template = data.get('body', '')
-                attachments_data = data.get('attachments', [])
-                auth = data.get('auth', {})
-                sender_email = auth.get('email', '')
-                sender_password = auth.get('password', '')
 
                 results = []
-                
+
                 if DEMO_MODE:
-                    # In demo mode, simulate sending
-                    for recipient in recipients:
-                        results.append({'recipient': recipient['email'], 'status': 'SIMULATED SUCCESS (Demo Mode)', 'success': True})
-                else:
-                    # Live Mode: Attempt to connect and send
-                    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
-                        server.login(sender_email, sender_password)
-                        
-                        for recipient in recipients:
-                            try:
-                                # Merge data into templates
-                                merged_subject = subject_template.format(**recipient)
-                                merged_body = body_template.format(**recipient)
+                    emails_to_send = data.get('emails', [])
+                    for email_data in emails_to_send:
+                        if 'results' not in locals():
+                            results = []
+                        results.append({'email': email_data.get('to'), 'success': True, 'error': None})
+                    summary = f"Simulated sending {len(results)} emails (Demo Mode)."
+                    self.send_json_response({'success': True, 'summary': summary, 'results': results})
+                    return
 
-                                # Create email message
-                                msg = MIMEMultipart()
-                                msg['From'] = sender_email
-                                msg['To'] = recipient['email']
-                                msg['Subject'] = merged_subject
-                                msg.attach(MIMEText(merged_body, 'html')) # Assuming body is HTML/rich text
+                # Live Mode Logic
+                smtp_server = data.get('smtpServer')
+                smtp_port = data.get('smtpPort')
+                smtp_user = data.get('smtpUser')
+                smtp_password = data.get('smtpPassword')
+                emails_to_send = data.get('emails', [])
 
-                                # Attachments
-                                for attachment in attachments_data:
-                                    mime_type = attachment['mime_type']
-                                    name = attachment['name']
-                                    b64_data = attachment['data']
-                                    
-                                    part = MIMEBase(*mime_type.split('/'))
-                                    part.set_payload(base64.b64decode(b64_data))
-                                    encoders.encode_base64(part)
-                                    part.add_header('Content-Disposition', f'attachment; filename="{name}"')
-                                    msg.attach(part)
+                if not all([smtp_server, smtp_port, smtp_user, smtp_password]):
+                    self.send_json_response({'success': False, 'error': 'Missing SMTP credentials.'})
+                    return
 
-                                # Send email
-                                server.sendmail(sender_email, recipient['email'], msg.as_string())
-                                results.append({'recipient': recipient['email'], 'status': 'SUCCESS', 'success': True})
-                            except Exception as e:
-                                results.append({'recipient': recipient['email'], 'status': f'FAILED: {e}', 'success': False})
+                with smtplib.SMTP(smtp_server, smtp_port) as server:
+                    server.starttls()
+                    server.login(smtp_user, smtp_password)
 
-                self.send_json_response({'status': 'completed', 'results': results})
+                    for email_data in emails_to_send:
+                        recipient_email = email_data.get('to')
+                        try:
+                            msg = MIMEMultipart()
+                            msg['From'] = email_data.get('from')
+                            msg['To'] = recipient_email
+                            msg['Subject'] = email_data.get('subject')
+                            if email_data.get('cc'): msg['Cc'] = email_data.get('cc')
+                            if email_data.get('bcc'): msg['Bcc'] = email_data.get('bcc')
+
+                            # Convert plain text newlines to HTML line breaks
+                            body_content = email_data.get('body', '')
+                            msg.attach(MIMEText(body_content.replace('\n', '<br>'), 'html'))
+
+                            for attachment in email_data.get('attachments', []):
+                                part = MIMEBase('application', 'octet-stream')
+                                _, b64_data = attachment['data'].split(',', 1)
+                                part.set_payload(base64.b64decode(b64_data))
+                                encoders.encode_base64(part)
+                                part.add_header('Content-Disposition', f'attachment; filename="{attachment["filename"]}"')
+                                msg.attach(part)
+
+                            server.send_message(msg)
+                            results.append({'email': recipient_email, 'success': True, 'error': None})
+                        except Exception as e:
+                            results.append({'email': recipient_email, 'success': False, 'error': str(e)})
+                
+                summary = f"Processed {len(results)} emails."
+                self.send_json_response({'success': True, 'summary': summary, 'results': results})
+
+            except Exception as e:
+                self.send_json_response({'success': False, 'error': f'Server error: {str(e)}'})
+
+        elif self.path == '/test-smtp':
+            try:
+                content_length = int(self.headers['Content-Length'])
+                post_data = self.rfile.read(content_length)
+                data = json.loads(post_data.decode('utf-8'))
+
+                smtp_server = data.get('smtpServer')
+                smtp_port = data.get('smtpPort')
+                smtp_user = data.get('smtpUser')
+                smtp_password = data.get('smtpPassword')
+
+                if not all([smtp_server, smtp_port, smtp_user, smtp_password]):
+                    self.send_json_response({'success': False, 'error': 'Missing SMTP credentials.'})
+                    return
+
+                # If in demo mode, simulate success without actually connecting
+                if DEMO_MODE:
+                    self.send_json_response({'success': True, 'message': 'Connection successful (Demo Mode)'})
+                    self.send_json_response({'success': False, 'error': 'Missing SMTP credentials.'})
+                    return
+
+                try:
+                    with smtplib.SMTP(smtp_server, smtp_port) as server:
+                        server.starttls()
+                        server.login(smtp_user, smtp_password)
+                    self.send_json_response({'success': True})
+                except smtplib.SMTPAuthenticationError:
+                    self.send_json_response({'success': False, 'error': 'Authentication failed. Check username/password.'})
+                except Exception as e:
+                    self.send_json_response({'success': False, 'error': str(e)})
 
             except json.JSONDecodeError:
-                self.send_error(400, 'Invalid JSON format')
+                self.send_json_response({'success': False, 'error': 'Invalid JSON format.'})
             except Exception as e:
-                self.send_error(500, f'Internal server error during processing: {str(e)}')
+                self.send_json_response({'success': False, 'error': f'Internal server error: {str(e)}'})
         else:
             self.send_error(404)
 
     def do_GET(self):
-        """Handle file requests (index.html, etc.) and API calls."""
-        # API endpoint for status
+        """Handle file requests (index.html, styles.css, script.js)"""
+        # Add a new endpoint to get the server status
         if self.path == '/api/status':
-            self.send_json_response({'demo_mode': DEMO_MODE})
+            self.send_json_response({'demoMode': DEMO_MODE})
             return
 
-        # Serve static files
+        # Resolve path relative to where the script is running (or the PyInstaller bundle)
         path_to_serve = self.path.lstrip('/')
         if not path_to_serve or path_to_serve == '/':
             path_to_serve = 'index.html'

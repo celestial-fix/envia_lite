@@ -99,6 +99,9 @@ header p {
 }
 
 .card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
     padding: 20px 24px;
     border-bottom: 1px solid #dee2e6;
@@ -152,11 +155,22 @@ small {
     margin-bottom: 30px;
 }
 
-.attachments-list h3 {
+.attachments-list-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     margin-bottom: 15px;
+}
+
+.attachments-list-header h3 {
     color: #2c3e50;
     border-bottom: 2px solid #667eea;
     padding-bottom: 8px;
+    margin-bottom: 0; /* Remove bottom margin to align with button */
+}
+
+.attachments-list-header .btn-delete {
+    margin: 0; /* Remove default button margin */
 }
 
 .attachment-item {
@@ -306,6 +320,51 @@ input[type="checkbox"] {
 input[type="checkbox"]:focus {
     outline: 2px solid #667eea;
     outline-offset: 2px;
+}
+
+/* Simple Rich Text Editor */
+.editor-toolbar {
+    background: #f1f3f5;
+    border: 2px solid #ddd;
+    border-bottom: none;
+    padding: 8px;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+}
+
+.editor-toolbar button {
+    background: white;
+    color: #333;
+    border: 1px solid #ccc;
+    padding: 0;
+    width: 32px;
+    height: 32px;
+    margin: 0 2px;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    line-height: 1;
+}
+
+.editor-toolbar button:hover {
+    background: #e9ecef;
+    transform: none;
+    box-shadow: none;
+}
+
+.rich-text-editor {
+    border: 2px solid #ddd;
+    padding: 12px;
+    min-height: 250px;
+    border-bottom-left-radius: 6px;
+    border-bottom-right-radius: 6px;
+}
+
+.rich-text-editor ul,
+.rich-text-editor ol {
+    padding-left: 40px; /* Restores standard list indentation */
+    list-style-position: inside; /* Ensures bullets appear inside the padded area */
 }
 
 /* Sections (Legacy - keeping for backward compatibility) */
@@ -597,6 +656,14 @@ button:active {
     color: #27ae60;
 }
 
+.result-summary-item {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-left: 4px solid #007bff;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 6px;
+}
 .result-email {
     font-weight: bold;
     margin-bottom: 5px;
@@ -886,6 +953,14 @@ button:active {
     background: #e8f4fd;
 }
 
+.btn-save {
+    background-color: #28a745; /* A nice green color */
+    color: white;
+}
+.btn-save:hover {
+    background-color: #218838; /* A darker green for hover */
+}
+
 /* Table cell editing states */
 .data-cell[contenteditable="true"]:focus,
 .header-cell[contenteditable="true"]:focus {
@@ -942,6 +1017,13 @@ button:active {
     border-radius: 8px;
     padding: 20px;
     margin-top: 20px;
+    transition: opacity 0.3s ease, background-color 0.3s ease;
+}
+
+.excluded-preview {
+    opacity: 0.5;
+    background-color: #f8f9fa;
+    cursor: not-allowed;
 }
 
 .preview-actions {
