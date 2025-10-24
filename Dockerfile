@@ -14,11 +14,10 @@ EXPOSE 9000
 
 # Set environment variables
 ENV PYTHONUNBUFFERED=1 \
-    PYTHONDONTWRITEBYTECODE=1 \
-    PORT=9000 \
-    DEMO_MODE=true
+    PYTHONDONTWRITEBYTECODE=1
 
 # Run the application directly
-# For DEMO mode (safe testing): CMD [ "python", "server.py", "9000", "--demo" ]
-# For LIVE mode (real emails): CMD [ "python", "server.py", "9000" ]
+# For DEMO mode (safe testing): 
+#CMD [ "python", "server.py", "9000", "--demo" ]
+# For LIVE mode (real emails):
 CMD [ "python", "server.py", "9000", "--demo" ]
