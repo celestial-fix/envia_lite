@@ -4,11 +4,8 @@ Minimal email merge application using Python's built-in HTTP server.
 Single-user, no database, stores everything client-side.
 Now includes the GUI launcher logic.
 """
-import io
 import os
-import re
 import sys
-import csv
 import json
 import base64
 import smtplib
@@ -24,8 +21,6 @@ from email import encoders
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
-
-# tkinter is conditionally imported only where needed to avoid issues in containerized environments
 
 # --- CRITICAL FIX FOR WINDOWS EMOJI/UNICODE PRINTING ---
 # On Windows, sys.stdout.encoding is often 'cp1252', which cannot handle emojis.
@@ -55,170 +50,183 @@ def resource_path(relative_path):
 
 # --- GUI Launcher Class ---
 
-class EnvialiteLauncher:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("Envía lite")
-        self.root.geometry("350x250") 
-        self.root.resizable(False, False)
+def launch_gui():
+    """
+    Dynamically imports tkinter and launches the GUI.
+    This function contains all GUI-related code to keep it isolated.
+    """
+    import tkinter as tk
+    from tkinter import ttk
 
-        # sys.executable points to the current running binary/interpreter
-        self.executable_path = sys.executable
+    class EnvialiteLauncher:
+        def __init__(self, root):
+            self.root = root
+            self.root.title("Envía lite")
+            self.root.geometry("350x250") 
+            self.root.resizable(False, False)
 
-        self.port_var = tk.StringVar(value="8000")
-        self.demo_var = tk.BooleanVar(value=True)
-        self.status_var = tk.StringVar(value="Server stopped")
-        self.server_process = None 
+            # sys.executable points to the current running binary/interpreter
+            self.executable_path = sys.executable
 
-        self.create_gui()
-        self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.port_var = tk.StringVar(value="8000")
+            self.demo_var = tk.BooleanVar(value=True)
+            self.status_var = tk.StringVar(value="Server stopped")
+            self.server_process = None 
 
-    def create_gui(self):
-        """Create the simple GUI"""
-        frame = ttk.Frame(self.root, padding="20")
-        frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
-        self.root.grid_columnconfigure(0, weight=1)
-        self.root.grid_rowconfigure(0, weight=1)
-        frame.grid_columnconfigure(1, weight=1)
-        frame.grid_columnconfigure(0, weight=0)
+            self.create_gui()
+            self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
 
-        # Port Input
-        ttk.Label(frame, text="Port:").grid(row=0, column=0, sticky=tk.W, pady=5)
-        port_entry = ttk.Entry(frame, textvariable=self.port_var, width=10)
-        port_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
+        def create_gui(self):
+            """Create the simple GUI"""
+            frame = ttk.Frame(self.root, padding="20")
+            frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+            self.root.grid_columnconfigure(0, weight=1)
+            self.root.grid_rowconfigure(0, weight=1)
+            frame.grid_columnconfigure(1, weight=1)
+            frame.grid_columnconfigure(0, weight=0)
 
-        # Demo Checkbox
-        demo_check = ttk.Checkbutton(frame, text="Demo Mode (Safe Testing)", variable=self.demo_var)
-        demo_check.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
+            # Port Input
+            ttk.Label(frame, text="Port:").grid(row=0, column=0, sticky=tk.W, pady=5)
+            port_entry = ttk.Entry(frame, textvariable=self.port_var, width=10)
+            port_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
 
-        # Buttons
-        button_frame = ttk.Frame(frame)
-        button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
-        
-        self.start_btn = ttk.Button(button_frame, text="Start Server", command=self.start_server, width=15)
-        self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
+            # Demo Checkbox
+            demo_check = ttk.Checkbutton(frame, text="Demo Mode (Safe Testing)", variable=self.demo_var)
+            demo_check.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
 
-        self.stop_btn = ttk.Button(button_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED, width=15)
-        self.stop_btn.pack(side=tk.LEFT)
-
-        # Status Label (larger font)
-        status_label = ttk.Label(frame, textvariable=self.status_var, wraplength=300, justify=tk.LEFT, font=('TkDefaultFont', 10, 'bold'))
-        status_label.grid(row=3, column=0, columnspan=2, pady=(15, 5), sticky=tk.W)
-
-        # URL Label (clickable)
-        self.url_text = tk.StringVar(value='http://localhost:8000') 
-        self.url_label = ttk.Label(frame, textvariable=self.url_text, foreground="blue", cursor="hand2")
-        self.url_label.grid(row=4, column=0, columnspan=2, pady=(5,0), sticky=tk.W)
-        self.url_label.bind("<Button-1>", self.open_browser)
-
-    def update_button_state(self, is_running):
-        """Helper to manage button state"""
-        if is_running:
-            self.start_btn.config(state=tk.DISABLED)
-            self.stop_btn.config(state=tk.NORMAL)
-        else:
-            self.start_btn.config(state=tk.NORMAL)
-            self.stop_btn.config(state=tk.DISABLED)
-
-    def start_server(self):
-        """Start the server by launching a new instance of the executable without the --gui flag"""
-        if self.server_process:
-            self.status_var.set("Error: Server is already running.")
-            return
-
-        try:
-            port = int(self.port_var.get())
-            if not (1024 <= port <= 65535):
-                self.status_var.set("Error: Port must be between 1024 and 65535.")
-                return
+            # Buttons
+            button_frame = ttk.Frame(frame)
+            button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
             
-            # CRITICAL: Launch the same executable. Arguments are port and optional --demo.
-            # Since the new logic checks for 'frozen' status, this sub-process will run the server
-            # because it will have arguments (the port number).
-            command = [self.executable_path, str(port)]
-            if self.demo_var.get():
-                command.append('--demo')
-            
-            self.status_var.set(f"Server starting on port {port}...")
-            
-            creationflags = 0
-            if sys.platform == 'win32':
-                # Prevents a new console window and detaches the process
-                creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
+            self.start_btn = ttk.Button(button_frame, text="Start Server", command=self.start_server, width=15)
+            self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-            # Launch the subprocess, keeping pipes open
-            self.server_process = subprocess.Popen(
-                command,
-                stdout=subprocess.PIPE, 
-                stderr=subprocess.PIPE,
-                creationflags=creationflags,
-                close_fds=False 
-            )
-            
-            time.sleep(0.5) # Give the OS time to start the process
-            poll_result = self.server_process.poll()
-            
-            if poll_result is not None: # Process died immediately
-                # Read any output from the pipes
-                stdout, stderr = self.server_process.communicate(timeout=0.5)
-                self.server_process = None
-                
-                error_message = f"Server failed to start (Code: {poll_result})."
-                if stderr:
-                    error_message += f"\nERROR: {stderr.decode('utf-8', errors='ignore').strip()}"
-                else:
-                     error_message += "\nPossible cause: Missing Python dependencies or port conflict."
-                
-                print(f"Server failed: {error_message}")
-                self.status_var.set(error_message[:200]) 
-                self.update_button_state(False)
-                return
+            self.stop_btn = ttk.Button(button_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED, width=15)
+            self.stop_btn.pack(side=tk.LEFT)
 
-            self.status_var.set(f"Server running successfully on port {port}")
-            self.url_text.set(f'http://localhost:{port}')
-            self.update_button_state(True)
+            # Status Label (larger font)
+            status_label = ttk.Label(frame, textvariable=self.status_var, wraplength=300, justify=tk.LEFT, font=('TkDefaultFont', 10, 'bold'))
+            status_label.grid(row=3, column=0, columnspan=2, pady=(15, 5), sticky=tk.W)
 
-        except ValueError:
-            self.status_var.set('Error: Port must be a valid number.')
-        except Exception as e:
-            self.status_var.set(f'Fatal Error: Failed to launch server process. Details: {e}')
+            # URL Label (clickable)
+            self.url_text = tk.StringVar(value='http://localhost:8000') 
+            self.url_label = ttk.Label(frame, textvariable=self.url_text, foreground="blue", cursor="hand2")
+            self.url_label.grid(row=4, column=0, columnspan=2, pady=(5,0), sticky=tk.W)
+            self.url_label.bind("<Button-1>", self.open_browser)
+
+        def update_button_state(self, is_running):
+            """Helper to manage button state"""
+            if is_running:
+                self.start_btn.config(state=tk.DISABLED)
+                self.stop_btn.config(state=tk.NORMAL)
+            else:
+                self.start_btn.config(state=tk.NORMAL)
+                self.stop_btn.config(state=tk.DISABLED)
+
+        def start_server(self):
+            """Start the server by launching a new instance of the executable without the --gui flag"""
             if self.server_process:
-                self.server_process.terminate()
-                self.server_process = None
-            self.update_button_state(False)
-
-    def stop_server(self):
-        """Stop the server by terminating the process"""
-        if self.server_process:
-            self.status_var.set("Stopping server...")
-            try:
-                self.server_process.terminate()
-                self.server_process.wait(timeout=1) 
-            except subprocess.TimeoutExpired:
-                self.server_process.kill()
-                self.server_process.wait()
-            except Exception as e:
-                self.status_var.set(f'Error stopping: {e}')
+                self.status_var.set("Error: Server is already running.")
                 return
-            
-            self.server_process = None
-            self.status_var.set("Server stopped")
-            self.update_button_state(False)
-        else:
-            self.status_var.set("Server is not running.")
-            self.update_button_state(False)
 
-    def on_closing(self):
-        """Handler to stop the server when the window is closed."""
-        self.stop_server() 
-        self.root.destroy() 
+            try:
+                port = int(self.port_var.get())
+                if not (1024 <= port <= 65535):
+                    self.status_var.set("Error: Port must be between 1024 and 65535.")
+                    return
+                
+                # CRITICAL: Launch the same executable. Arguments are port and optional --demo.
+                # Since the new logic checks for 'frozen' status, this sub-process will run the server
+                # because it will have arguments (the port number).
+                command = [self.executable_path, str(port)]
+                if self.demo_var.get():
+                    command.append('--demo')
+                
+                self.status_var.set(f"Server starting on port {port}...")
+                
+                creationflags = 0
+                if sys.platform == 'win32':
+                    # Prevents a new console window and detaches the process
+                    creationflags = subprocess.DETACHED_PROCESS | subprocess.CREATE_NEW_PROCESS_GROUP
 
-    def open_browser(self, event=None):
-        """Open browser"""
-        if self.server_process:
-            webbrowser.open(self.url_text.get())
-        else:
-            self.status_var.set("Start the server before opening the browser.")
+                # Launch the subprocess, keeping pipes open
+                self.server_process = subprocess.Popen(
+                    command,
+                    stdout=subprocess.PIPE, 
+                    stderr=subprocess.PIPE,
+                    creationflags=creationflags,
+                    close_fds=False 
+                )
+                
+                time.sleep(0.5) # Give the OS time to start the process
+                poll_result = self.server_process.poll()
+                
+                if poll_result is not None: # Process died immediately
+                    # Read any output from the pipes
+                    stdout, stderr = self.server_process.communicate(timeout=0.5)
+                    self.server_process = None
+                    
+                    error_message = f"Server failed to start (Code: {poll_result})."
+                    if stderr:
+                        error_message += f"\nERROR: {stderr.decode('utf-8', errors='ignore').strip()}"
+                    else:
+                         error_message += "\nPossible cause: Missing Python dependencies or port conflict."
+                    
+                    print(f"Server failed: {error_message}")
+                    self.status_var.set(error_message[:200]) 
+                    self.update_button_state(False)
+                    return
+
+                self.status_var.set(f"Server running successfully on port {port}")
+                self.url_text.set(f'http://localhost:{port}')
+                self.update_button_state(True)
+
+            except ValueError:
+                self.status_var.set('Error: Port must be a valid number.')
+            except Exception as e:
+                self.status_var.set(f'Fatal Error: Failed to launch server process. Details: {e}')
+                if self.server_process:
+                    self.server_process.terminate()
+                    self.server_process = None
+                self.update_button_state(False)
+
+        def stop_server(self):
+            """Stop the server by terminating the process"""
+            if self.server_process:
+                self.status_var.set("Stopping server...")
+                try:
+                    self.server_process.terminate()
+                    self.server_process.wait(timeout=1) 
+                except subprocess.TimeoutExpired:
+                    self.server_process.kill()
+                    self.server_process.wait()
+                except Exception as e:
+                    self.status_var.set(f'Error stopping: {e}')
+                    return
+                
+                self.server_process = None
+                self.status_var.set("Server stopped")
+                self.update_button_state(False)
+            else:
+                self.status_var.set("Server is not running.")
+                self.update_button_state(False)
+
+        def on_closing(self):
+            """Handler to stop the server when the window is closed."""
+            self.stop_server() 
+            self.root.destroy() 
+
+        def open_browser(self, event=None):
+            """Open browser"""
+            if self.server_process:
+                webbrowser.open(self.url_text.get())
+            else:
+                self.status_var.set("Start the server before opening the browser.")
+
+    # The GUI will handle launching the server sub-process
+    root = tk.Tk()
+    app = EnvialiteLauncher(root)
+    root.mainloop()
 
 
 # --- Original Server Handler Class ---
@@ -408,8 +416,8 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description='Envialite Email Merge Server and Launcher.')
-    parser.add_argument('--gui', action='store_true', help='Launch the graphical user interface.')
-    parser.add_argument('--demo', action='store_true', help='Enable demo mode (safe testing).')
+    parser.add_argument('-g', '--gui', action='store_true', help='Launch the graphical user interface.')
+    parser.add_argument('-d', '--demo', action='store_true', help='Enable demo mode (safe testing).')
     parser.add_argument('port', type=int, nargs='?', default=8000, help='Port number to run the server on.')
     
     # Check if running as a frozen PyInstaller executable AND if it's the main entry point (no arguments).
@@ -419,14 +427,7 @@ def main():
     # 1. FROZEN MODE (PyInstaller Binary, primary launch) -> Always launch GUI
     if is_frozen_main_entry:
         print("Launching GUI from frozen binary...")
-        # Import GUI components only when needed for frozen binary launch
-        import tkinter as tk
-        from tkinter import ttk
-
-        # The GUI will handle launching the server sub-process
-        root = tk.Tk()
-        app = EnvialiteLauncher(root)
-        root.mainloop()
+        launch_gui()
         return
 
     # 2. DEVELOPMENT MODE (python server.py) OR SUB-PROCESS MODE (launched by GUI)
@@ -434,18 +435,7 @@ def main():
     # Parse arguments for either server (default) or explicit GUI launch
     args = parser.parse_args()
 
-    # If --gui is explicitly set (used during development testing)
-    if args.gui:
-        # Import GUI components only when explicitly requested
-        import tkinter as tk
-        from tkinter import ttk
-
-        root = tk.Tk()
-        app = EnvialiteLauncher(root)
-        root.mainloop()
-        return
-
-    # Default: Run the Server (this path is taken by 'python server.py' or the GUI's sub-process)
+    # Set DEMO_MODE from arguments before it's used
     global DEMO_MODE
     DEMO_MODE = args.demo
 
