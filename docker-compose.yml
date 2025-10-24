@@ -3,14 +3,5 @@ services:
     container_name: envialite
     build: .
     restart: unless-stopped
-    env_file: .env
-    environment:
-      - PYTHONUNBUFFERED=1
-      - PYTHONDONTWRITEBYTECODE=1
-      - PORT=${PORT:-8000}
-      - DEMO_MODE=${DEMO_MODE:-false}
-    #volumes:
-      # Optional: Mount volume for file uploads persistence
-      #- ./uploads:/app/uploads
     ports:
-      - "${PORT:-8000}:${PORT:-8000}"
+      - "9000:9000"
