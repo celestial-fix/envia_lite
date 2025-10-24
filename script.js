@@ -2294,6 +2294,10 @@ function testSmtpConnection() {
     window.envialiteApp.testSmtpConnection();
 }
 
+function saveAccountSettings() {
+    window.envialiteApp.saveSmtpSettings();
+}
+
 function navigateEmail(direction) {
     window.envialiteApp.navigateEmail(direction);
 }
