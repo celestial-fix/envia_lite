@@ -138,9 +138,9 @@ Your Company">
 
                 <!-- Attachments -->
                 <div class="email-attachments">
-                    <h3>📎 Constant Attachments</h3>
+                    <h3>📎 Attachments For All</h3>
                     <div class="form-group">
-                        <label for="emailAttachments">Select Files (same for all emails):</label>
+                        <label for="emailAttachments">Select Files (for all emails):</label>
                         <select id="emailAttachments" multiple>
                             <option value="">Select files to attach...</option>
                         </select><br>
@@ -148,16 +148,16 @@ Your Company">
                     </div>
                     
                     <!-- Variable Attachments -->
-                    <h3>🔄 Variable Attachments</h3>
+                    <h3>🔄 Attachments Variable</h3>
                     <div class="form-group">
-                        <label for="variableAttachments">Dynamic Attachments (from CSV):</label>
+                        <label for="variableAttachments">Data Source Column:</label>
                         <input type="text" id="variableAttachments" placeholder="{{attachments}}" />
-                        <small>Use template variables like {{attachments}} to read from CSV column named "attachments"</small>
+                        <small>Use template variables like {{attachments}} to read from data column "attachments"</small>
                     </div>
                     <div class="form-group">
                         <label for="attachmentDelimiter">Delimiter (optional):</label>
                         <input type="text" id="attachmentDelimiter" placeholder=";" maxlength="3" style="width: 100px;" />
-                        <small>Character to split multiple attachment filenames (e.g., ";" for "file1.pdf;file2.pdf")</small>
+                        <small>Character used to split filenames (e.g., ";" for "file1.pdf;file2.pdf")</small>
                     </div>
                 </div>
             </div>
