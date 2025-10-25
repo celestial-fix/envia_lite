@@ -85,6 +85,24 @@ class EnvialiteApp {
                 }
             });
         });
+
+        // Add listener for the hidden CSV file input
+        const csvFileInput = document.getElementById('csvFileInput');
+        csvFileInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    try {
+                        this.parsePastedData(event.target.result);
+                    } catch (error) {
+                        this.showStatus(`Error processing CSV file: ${error.message}`, 'error');
+                    }
+                };
+                reader.readAsText(file);
+            }
+            e.target.value = ''; // Reset input so the same file can be selected again
+        });
     }
 
     async fetchServerStatus() {
@@ -183,6 +201,11 @@ class EnvialiteApp {
         } catch (error) {
             console.error('Error loading data:', error);
         }
+    }
+
+    importFromCSV() {
+        const fileInput = document.getElementById('csvFileInput');
+        fileInput.click();
     }
 
     parseCSV() {
@@ -1308,6 +1331,120 @@ class EnvialiteApp {
         this.showStatus('SMTP settings saved', 'success');
     }
 
+    clearAccountSettings() {
+        // Clear SMTP settings from localStorage
+        localStorage.removeItem('envialite_smtp_settings');
+
+        // Reset form fields to default values
+        document.getElementById('smtpServer').value = 'smtp.gmail.com';
+        document.getElementById('smtpPort').value = '587';
+        document.getElementById('smtpUser').value = '';
+        document.getElementById('smtpPassword').value = '';
+        document.getElementById('fromEmail').value = '';
+        document.getElementById('fromName').value = '';
+        document.getElementById('defaultSubject').value = '';
+
+        // Update instance variables
+        this.smtpServer = 'smtp.gmail.com';
+        this.smtpPort = 587;
+        this.smtpUser = '';
+        this.smtpPassword = '';
+        this.fromEmail = '';
+        this.fromName = '';
+        this.subject = '';
+
+        // Reset connection status
+        this.smtpConnectionTested = false;
+        this.smtpConnectionValid = false;
+
+        // Clear test result display
+        const testResult = document.getElementById('smtpTestResult');
+        if (testResult) {
+            testResult.innerHTML = '';
+        }
+
+        this.showStatus('Account settings cleared', 'success');
+    }
+
+    clearTemplateData() {
+        // Clear template data from localStorage
+        localStorage.removeItem('envialite_data');
+
+        // Reset template form fields to empty values
+        document.getElementById('fromName').value = '';
+        document.getElementById('fromEmail').value = '';
+        document.getElementById('toEmail').value = '';
+        document.getElementById('ccEmail').value = '';
+        document.getElementById('bccEmail').value = '';
+        document.getElementById('emailSubject').value = '';
+        document.getElementById('emailBody').innerHTML = '';
+        document.getElementById('variableAttachments').value = '';
+        document.getElementById('attachmentDelimiter').value = '';
+
+        // Clear attachment selections
+        const emailAttachments = document.getElementById('emailAttachments');
+        if (emailAttachments) {
+            for (let i = 0; i < emailAttachments.options.length; i++) {
+                emailAttachments.options[i].selected = false;
+            }
+        }
+
+        // Update instance variables
+        this.fromName = '';
+        this.fromEmail = '';
+        this.toEmail = '';
+        this.ccEmail = '';
+        this.bccEmail = '';
+        this.emailSubject = '';
+        this.emailBody = '';
+        this.variableAttachments = '';
+        this.attachmentDelimiter = '';
+
+        // Clear CSV data and table
+        this.csvData = '';
+        document.getElementById('csvData').value = '';
+        this.clearTable();
+
+        // Clear exclusions
+        this.excludedEmailIndices.clear();
+
+        // Clear preview data
+        this.emailPreviews = [];
+        this.currentEmailIndex = 0;
+        this.currentPreviewAttachments = new Map();
+
+        // Hide preview section
+        document.getElementById('previewSection').style.display = 'none';
+
+        this.showStatus('Template data cleared', 'success');
+    }
+
+    clearAllAttachments() {
+        // Clear all attachments from the Map
+        this.attachments.clear();
+
+        // Clear attachment selections in dropdown
+        const emailAttachments = document.getElementById('emailAttachments');
+        if (emailAttachments) {
+            for (let i = 0; i < emailAttachments.options.length; i++) {
+                emailAttachments.options[i].selected = false;
+            }
+        }
+
+        // Clear preview attachments
+        this.currentPreviewAttachments.clear();
+
+        // Update displays
+        this.displayAttachments();
+        this.populateAttachmentsDropdown();
+        this.saveAttachments();
+
+        // Update preview attachments display if preview is active
+        this.displayPreviewAttachments();
+
+        this.showStatus('All attachments cleared', 'success');
+    }
+
     loadSmtpSettings() {
         try {
             const saved = localStorage.getItem('envialite_smtp_settings');
@@ -2298,6 +2435,18 @@ function saveAccountSettings() {
     window.envialiteApp.saveSmtpSettings();
 }
 
+function clearAccountSettings() {
+    window.envialiteApp.clearAccountSettings();
+}
+
+function clearTemplateData() {
+    window.envialiteApp.clearTemplateData();
+}
+
+function clearAllAttachments() {
+    window.envialiteApp.clearAllAttachments();
+}
+
 function navigateEmail(direction) {
     window.envialiteApp.navigateEmail(direction);
 }
@@ -2329,6 +2478,10 @@ function removeColumn() {
 
 function pasteFromClipboard() {
     window.envialiteApp.pasteFromClipboard();
+}
+
+function importFromCSV() {
+    window.envialiteApp.importFromCSV();
 }
 
 function exportToCSV() {

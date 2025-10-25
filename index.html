@@ -28,7 +28,10 @@
         <div id="settings" class="tab-card active">
             <div class="card-header">
                 <h2>📧 Email Account Settings</h2>
-                <button onclick="saveAccountSettings()" class="btn-small btn-save" title="Save Account Settings">💾 Save</button>
+                <div class="header-buttons">
+                    <button onclick="saveAccountSettings()" class="btn-small btn-save" title="Save Account Settings">💾 Save</button>
+                    <button onclick="clearAccountSettings()" class="btn-small btn-delete" title="Clear Account Settings">🗑️ Clear</button>
+                </div>
             </div>
             <div class="card-content">
                 <!-- SMTP Configuration -->
@@ -67,7 +70,10 @@
         <div id="template" class="tab-card">
             <div class="card-header">
                 <h2>📝 Email Composition</h2>
-                <button onclick="saveData()" class="btn-small btn-save" title="Save Template Data">💾 Save</button>
+                <div class="header-buttons">
+                    <button onclick="saveData()" class="btn-small btn-save" title="Save Template Data">💾 Save</button>
+                    <button onclick="clearTemplateData()" class="btn-small btn-delete" title="Clear Template Data">🗑️ Clear</button>
+                </div>
             </div>
             <div class="card-content">
                 <!-- Email Headers -->
@@ -160,6 +166,10 @@ Your Company">
         <div id="data" class="tab-card">
             <div class="card-header">
                 <h2>📊 Data Source</h2>
+                <div class="header-buttons">
+                    <button onclick="saveData()" class="btn-small btn-save" title="Save Data">💾 Save</button>
+                    <button onclick="clearTable()" class="btn-small btn-delete" title="Clear Table">🗑️ Clear</button>
+                </div>
             </div>
             <div class="card-content">
                 <!-- Table Editor Controls -->
@@ -172,9 +182,8 @@ Your Company">
                     </div>
                     <div class="control-group">
                         <button onclick="pasteFromClipboard()" class="btn-small" title="Paste from Clipboard">📋 Paste</button>
+                        <button onclick="importFromCSV()" class="btn-small" title="Import from CSV">📥 Import</button>
                         <button onclick="exportToCSV()" class="btn-small" title="Export to CSV">📤 Export</button>
-                        <button onclick="saveData()" class="btn-small btn-save" title="Save Data">💾 Save</button>
-                        <button onclick="clearTable()" class="btn-small btn-delete" title="Clear Table">🗑️ Clear</button>
                     </div>
                 </div>
 
@@ -208,6 +217,9 @@ Your Company">
 
                 <!-- Hidden CSV Data for backward compatibility -->
                 <textarea id="csvData" style="display: none;"></textarea>
+
+                <!-- Hidden file input for CSV import -->
+                <input type="file" id="csvFileInput" accept=".csv" style="display: none;" />
 
                 <!-- Table Editor Help -->
                 <div class="table-help">
