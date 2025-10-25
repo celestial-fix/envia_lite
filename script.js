@@ -1633,6 +1633,11 @@ class EnvialiteApp {
 
     // Attachment Management Methods
     async uploadFiles() {
+        if (this.isServerInDemoMode) {
+            this.showStatus('File upload is disabled in Demo Mode.', 'error');
+            return;
+        }
+
         const fileInput = document.getElementById('fileUpload');
         const files = fileInput.files;
 
