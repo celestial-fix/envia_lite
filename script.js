@@ -36,6 +36,7 @@ class EnvialiteApp {
         // Preview navigation
         this.currentEmailIndex = 0;
         this.emailPreviews = []; // Store all generated email previews
+        this.sendResults = []; // Store results from the server
 
         this.init();
     }
@@ -103,6 +104,26 @@ class EnvialiteApp {
             }
             e.target.value = ''; // Reset input so the same file can be selected again
         });
+
+        // Use event delegation for dynamically created result items
+        const resultsContent = document.getElementById('resultsContent');
+        if (resultsContent) {
+            resultsContent.addEventListener('click', (e) => {
+                if (e.target.classList.contains('btn-view-full')) {
+                    // Handle View Full Message button
+                    const resultItem = e.target.closest('.result-item');
+                    const index = resultItem ? parseInt(resultItem.dataset.resultIndex) : null;
+                    if (index !== null) {
+                        this.showMessageDetails(index);
+                    }
+                } else if (e.target.closest('.result-item')) {
+                    // Handle result item click to toggle details
+                    const resultItem = e.target.closest('.result-item');
+                    const index = parseInt(resultItem.dataset.resultIndex);
+                    this.toggleResultDetails(resultItem, index);
+                }
+            });
+        }
     }
 
     async fetchServerStatus() {
@@ -944,7 +965,12 @@ class EnvialiteApp {
                         data: foundAttachment.data // Include the base64 data
                     });
                 } else {
-                    console.error('Variable attachment missing data:', filename);
+                    // Instead of throwing an error, just log a warning and skip
+                    console.warn(`Variable attachment '${filename}' not found in uploaded attachments. Available files:`, Array.from(this.attachments.keys()));
+                    // Show user-friendly warning if filename contains alphanumeric chars (avoid spam for template variables)
+                    if (filename.match(/[a-zA-Z0-9]/)) {
+                        this.showStatus(`Warning: Attachment file '${filename}' not found. Make sure you've uploaded it in the Attachments tab.`, 'error');
+                    }
                 }
             });
         }
@@ -1215,29 +1241,283 @@ class EnvialiteApp {
         resultsContent.innerHTML = '';
 
         // Summary
+        this.sendResults = results; // Store results for modal access
+
         const summaryDiv = document.createElement('div');
         summaryDiv.className = 'result-summary-item';
         summaryDiv.innerHTML = `<div class="result-summary"><strong>${summary}</strong></div>`;
         resultsContent.appendChild(summaryDiv);
-        
+
         // Individual results
-        results.forEach(result => {
+        results.forEach((result, index) => {
             const resultDiv = document.createElement('div');
-            resultDiv.className = `result-item ${result.success ? 'success' : 'error'}`;
+            resultDiv.className = `result-item ${result.success ? 'success' : 'error'} clickable-result`;
+            resultDiv.dataset.resultIndex = index; // Add index for event handling
 
             const statusIcon = result.success ? '✅' : '❌';
             const errorText = result.error ? `<div class="result-error">Error: ${result.error}</div>` : '';
 
             // Handle cases where there's no email column
             const resultIdentifier = result.email || `Row ${result._rowNumber || 'Unknown'}`;
+
             resultDiv.innerHTML = `
-                <div class="result-email">${statusIcon} ${resultIdentifier}</div>
-                <div class="result-status">${result.success ? 'Sent successfully' : 'Failed to send'}</div>
-                ${errorText}
+                <div class="result-header">
+                    <div class="result-email">${statusIcon} ${resultIdentifier}</div>
+                    <div class="result-status">${result.success ? 'Sent successfully' : 'Failed to send'}</div>
+                    ${errorText}
+                </div>
+                <div class="result-details expandable-collapsed" style="display: none;"></div>
             `;
 
             resultsContent.appendChild(resultDiv);
         });
+    }
+
+    showMessageDetails(index) {
+        const result = this.sendResults[index];
+        let message = null;
+
+        if (result && result.message) {
+            message = result.message;
+        } else if (this.emailPreviews[index]) {
+            // Use the preview data as fallback
+            const preview = this.emailPreviews[index];
+            message = {
+                to: preview.to,
+                from: preview.from,
+                subject: preview.subject,
+                cc: preview.cc,
+                bcc: preview.bcc,
+                body: preview.body,
+                attachments: preview.attachments
+            };
+            message.fromPreview = true;
+        } else {
+            // No data available
+            message = {
+                to: result?.email || 'N/A',
+                from: 'N/A',
+                subject: 'N/A',
+                cc: 'N/A',
+                bcc: 'N/A',
+                body: 'No message data available',
+                attachments: []
+            };
+        }
+
+        const modal = document.getElementById('messageModal');
+        const contentDiv = document.getElementById('modalMessageContent');
+        const modalTitle = modal.querySelector('h3');
+
+        const bodyContent = this.escapeHtml(message.body);
+
+        if (result.success) {
+            modalTitle.textContent = `📧 Sent Message Details`;
+            contentDiv.innerHTML = `
+                <div class="message-details-grid">
+                    <div class="message-field">
+                        <label>To:</label>
+                        <span>${this.escapeHtml(message.to || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>From:</label>
+                        <span>${this.escapeHtml(message.from || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>Subject:</label>
+                        <span>${this.escapeHtml(message.subject || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>CC:</label>
+                        <span>${this.escapeHtml(message.cc || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>BCC:</label>
+                        <span>${this.escapeHtml(message.bcc || 'N/A')}</span>
+                    </div>
+                </div>
+                <hr>
+                <div class="message-body-section">
+                    <label>Message Body:</label>
+                    <pre class="message-body">${bodyContent}</pre>
+                </div>
+                ${message.attachments && message.attachments.length > 0 ? `
+                    <hr>
+                    <div class="message-attachments-section">
+                        <label>Attachments:</label>
+                        <div class="attachment-list">
+                            ${message.attachments.map(att => `
+                                <div class="message-attachment-item">
+                                    📎 ${this.escapeHtml(att.filename || 'Unknown file')}
+                                    ${att.size ? ` (${this.formatFileSize(att.size)})` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+            `;
+        } else {
+            modalTitle.textContent = `❌ Failed Message Details`;
+            contentDiv.innerHTML = `
+                <div class="message-details-grid">
+                    <div class="message-field">
+                        <label>To:</label>
+                        <span>${this.escapeHtml(message.to || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>From:</label>
+                        <span>${this.escapeHtml(message.from || 'N/A')}</span>
+                    </div>
+                    <div class="message-field">
+                        <label>Subject:</label>
+                        <span>${this.escapeHtml(message.subject || 'N/A')}</span>
+                    </div>
+                </div>
+                <hr>
+                <div class="message-body-section">
+                    <label>Message Body:</label>
+                    <pre class="message-body">${bodyContent}</pre>
+                </div>
+                <hr>
+                <div class="error-section">
+                    <label style="color: #dc3545;">❌ Error:</label>
+                    <div class="error-message">${this.escapeHtml(result.error || 'Unknown error')}</div>
+                </div>
+            `;
+        }
+
+        modal.style.display = 'flex';
+    }
+
+    closeMessageModal() {
+        document.getElementById('messageModal').style.display = 'none';
+    }
+
+    toggleResultDetails(cardElement, index) {
+        const detailsDiv = cardElement.querySelector('.result-details');
+        const isExpanded = detailsDiv && detailsDiv.style.display !== 'none';
+
+        // Collapse if already expanded
+        if (isExpanded) {
+            detailsDiv.style.display = 'none';
+            cardElement.classList.remove('expanded');
+            return;
+        }
+
+        // Try to get data for this result
+        let result = this.sendResults ? this.sendResults[index] : null;
+        let message = null;
+
+        console.log('toggleResultDetails for index:', index);
+        console.log('sendResults:', JSON.stringify(this.sendResults, null, 2));
+        console.log('emailPreviews length:', this.emailPreviews ? this.emailPreviews.length : 0);
+
+        // Try to find message data from various sources
+        if (result && result.message) {
+            message = result.message;
+            console.log('✅ Using message from server result:', message);
+        } else if (this.emailPreviews && this.emailPreviews[index]) {
+            // Use the preview data as fallback
+            const preview = this.emailPreviews[index];
+            message = {
+                to: preview.to,
+                from: preview.from,
+                subject: preview.subject,
+                cc: preview.cc,
+                bcc: preview.bcc,
+                body: preview.body,
+                attachments: preview.attachments
+            };
+            // Mark that this is from preview data so we can show appropriate message
+            message.fromPreview = true;
+            console.log('🔄 Using message from preview data:', message);
+        } else if (result) {
+            // Fallback: use whatever basic info we have from the result
+            message = {
+                to: result.email || 'N/A',
+                from: 'N/A',
+                subject: 'N/A',
+                body: 'Message sent successfully. Full details not available.'
+            };
+            console.log('⚠️ Using basic result data:', message);
+        } else {
+            // Last resort: show placeholder
+            message = {
+                to: 'N/A',
+                from: 'N/A',
+                subject: 'N/A',
+                body: 'No message data available'
+            };
+            console.log('❌ No message data available at all');
+        }
+
+        // Show/hide the details div
+        if (!detailsDiv) {
+            // Create new details div if it doesn't exist
+            detailsDiv = document.createElement('div');
+            detailsDiv.className = 'result-details';
+            detailsDiv.style.padding = '15px';
+            detailsDiv.style.border = '2px solid #007bff';
+            detailsDiv.style.borderRadius = '8px';
+            detailsDiv.style.marginTop = '10px';
+            detailsDiv.style.backgroundColor = '#e8f4fd';
+            detailsDiv.style.color = '#000';
+            cardElement.appendChild(detailsDiv);
+            console.log('Created new details div');
+        }
+
+        // Always populate the details div when expanding
+        console.log('Populating details div with content');
+
+        const statusNote = message.fromPreview ?
+            '<p style="color: #856404; font-size: 12px; font-style: italic; font-weight: bold;">📧 (Showing preview data)</p>' :
+            '<p style="color: #28a745; font-size: 12px; font-style: italic; font-weight: bold;">✅ (Email sent successfully)</p>';
+
+        // Make sure we have some data to show
+        const hasData = message.to !== 'N/A' || message.from !== 'N/A' || message.subject !== 'N/A';
+        let detailsHTML;
+
+        if (!hasData) {
+            detailsHTML = `
+                <div class="result-preview-info">
+                    <p>No email data available for this result.</p>
+                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ View Full Message</button>
+                </div>
+            `;
+        } else {
+            let attachmentInfo = '';
+            if (message.attachments && message.attachments.length > 0) {
+                if (message.attachments.length === 1) {
+                    const attachment = message.attachments[0];
+                    attachmentInfo = `<p><strong>Attachment:</strong> 📎 ${this.escapeHtml(attachment.filename)}${attachment.size ? ` (${this.formatFileSize(attachment.size)})` : ''}</p>`;
+                } else {
+                    attachmentInfo = `<p><strong>Attachments:</strong> 📎 ${message.attachments.length} files</p>`;
+                }
+            }
+
+            detailsHTML = `
+                <div class="result-preview-info">
+                    <p><strong>To:</strong> ${this.escapeHtml(message.to || 'N/A')}</p>
+                    <p><strong>From:</strong> ${this.escapeHtml(message.from || 'N/A')}</p>
+                    <p><strong>Subject:</strong> ${this.escapeHtml(message.subject || 'N/A')}</p>
+                    ${message.body && message.body !== 'No message data available' ?
+                        `<p><strong>Body:</strong> ${this.escapeHtml(message.body.substring(0, 100))}${message.body.length > 100 ? '...' : ''}</p>` : ''
+                    }
+                    ${attachmentInfo}
+                    ${statusNote}
+                </div>
+                <div class="result-actions">
+                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ View Full Message</button>
+                </div>
+            `;
+        }
+
+        detailsDiv.innerHTML = detailsHTML;
+        detailsDiv.style.display = 'block';
+        detailsDiv.style.visibility = 'visible';
+        detailsDiv.style.opacity = '1';
+        cardElement.classList.add('expanded');
+        console.log('Details div populated with HTML:', detailsHTML);
     }
 
     getFormData() {
@@ -2462,6 +2742,14 @@ function toggleExcludeEmail() {
 
 function addAttachmentFromPicker() {
     window.envialiteApp.addAttachmentFromPicker();
+}
+
+function showMessageDetails(index) {
+    window.envialiteApp.showMessageDetails(index);
+}
+
+function closeMessageModal() {
+    window.envialiteApp.closeMessageModal();
 }
 
 // Table Editor Global Functions

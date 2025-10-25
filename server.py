@@ -310,9 +310,9 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
                                 msg.attach(part)
 
                             server.send_message(msg)
-                            results.append({'email': recipient_email, 'success': True, 'error': None})
+                            results.append({'email': recipient_email, 'success': True, 'error': None, 'message': email_data})
                         except Exception as e:
-                            results.append({'email': recipient_email, 'success': False, 'error': str(e)})
+                            results.append({'email': recipient_email, 'success': False, 'error': str(e), 'message': email_data})
                 
                 summary = f"Processed {len(results)} emails."
                 self.send_json_response({'success': True, 'summary': summary, 'results': results})
@@ -360,6 +360,11 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
 
     def do_GET(self):
         """Handle file requests (index.html, styles.css, script.js)"""
+        if self.path == '/favicon.ico':
+            self.send_response(204)  # No Content
+            self.end_headers()
+            return
+
         # Add a new endpoint to get the server status
         if self.path == '/api/status':
             self.send_json_response({'demoMode': DEMO_MODE})
