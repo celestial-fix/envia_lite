@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Envía - Mail Merge</title>
+    <title>Envía - Combinación de Correos</title>
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -14,11 +14,11 @@
             </div>
             <div class="header-center">
                 <h1><a href="https://github.com/heavenly-tech/envia_lite">📨</a>Envía</h1>
-                <p>Personal Mail Merge Tool</p>
+                <p>Herramienta Personal de Combinación de Correos</p>
             </div>
             <div class="header-right">
                 <div class="header-language-picker">
-                    <label>Language | Idioma:</label>
+                    <label>Idioma | Language:</label>
                     <select id="langSwitch" onchange="switchLanguage(this.value)">
                         <option value="en">🇬🇧 English</option>
                         <option value="es">🇪🇸 Español</option>
@@ -29,49 +29,49 @@
 
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-            <button class="tab-btn active" onclick="showTab('settings')">📧 Account</button>
-            <button class="tab-btn" onclick="showTab('template')">📝 Template</button>
-            <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
-            <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
-            <button class="tab-btn" onclick="showTab('preview'); previewEmails();">👁️ Preview</button>
-            <button id="resultsTabBtn" class="tab-btn" onclick="showTab('results')">📈 Results</button>
+            <button class="tab-btn active" onclick="showTab('settings')">📧 Cuenta</button>
+            <button class="tab-btn" onclick="showTab('template')">📝 Plantilla</button>
+            <button class="tab-btn" onclick="showTab('data')">📊 Datos</button>
+            <button class="tab-btn" onclick="showTab('attachments')">📎 Adjuntos</button>
+            <button class="tab-btn" onclick="showTab('preview'); previewEmails();">👁️ Vista Previa</button>
+            <button id="resultsTabBtn" class="tab-btn" onclick="showTab('results')">📈 Resultados</button>
         </div>
 
         <!-- Tab Content Cards -->
         <div id="settings" class="tab-card active">
             <div class="card-header">
-                <h2>📧 Email Account Settings</h2>
+                <h2>📧 Configuración de Cuenta de Correo</h2>
                 <div class="header-buttons">
-                    <button onclick="saveAccountSettings()" class="btn-small btn-save" title="Save Account Settings">💾 Save</button>
-                    <button onclick="clearAccountSettings()" class="btn-small btn-delete" title="Clear Account Settings">🗑️ Clear</button>
+                    <button onclick="saveAccountSettings()" class="btn-small btn-save" title="Guardar Configuración de Cuenta">💾 Guardar</button>
+                    <button onclick="clearAccountSettings()" class="btn-small btn-delete" title="Limpiar Configuración de Cuenta">🗑️ Limpiar</button>
                 </div>
             </div>
             <div class="card-content">
                 <!-- SMTP Configuration -->
                 <div class="settings-section">
-                    <h3>🔧 SMTP Configuration</h3>
+                    <h3>🔧 Configuración SMTP</h3>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="smtpServer">SMTP Server:</label>
+                            <label for="smtpServer">Servidor SMTP:</label>
                             <input type="text" id="smtpServer" placeholder="smtp.gmail.com" />
                         </div>
                         <div class="form-group">
-                            <label for="smtpPort">SMTP Port:</label>
+                            <label for="smtpPort">Puerto SMTP:</label>
                             <input type="number" id="smtpPort" placeholder="587" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="smtpUser">SMTP Username:</label>
-                            <input type="email" id="smtpUser" placeholder="your-email@gmail.com" />
+                            <label for="smtpUser">Usuario SMTP:</label>
+                            <input type="email" id="smtpUser" placeholder="tu-correo@gmail.com" />
                         </div>
                         <div class="form-group">
-                            <label for="smtpPassword">SMTP Password:</label>
-                            <input type="password" id="smtpPassword" placeholder="your-app-password" />
+                            <label for="smtpPassword">Contraseña SMTP:</label>
+                            <input type="password" id="smtpPassword" placeholder="tu-contraseña-de-app" />
                         </div>
                     </div>
                     <div class="form-group">
-                        <button onclick="testSmtpConnection()">🔍 Test Connection</button>
+                        <button onclick="testSmtpConnection()">🔍 Probar Conexión</button>
                         <span id="smtpTestResult" style="margin-left: 10px;"></span>
                     </div>
                 </div>
@@ -82,95 +82,97 @@
 
         <div id="template" class="tab-card">
             <div class="card-header">
-                <h2>📝 Email Composition</h2>
+                <h2>📝 Composición de Correo</h2>
                 <div class="header-buttons">
-                    <button onclick="saveData()" class="btn-small btn-save" title="Save Template Data">💾 Save</button>
-                    <button onclick="clearTemplateData()" class="btn-small btn-delete" title="Clear Template Data">🗑️ Clear</button>
+                    <button onclick="saveData()" class="btn-small btn-save" title="Guardar Datos de Plantilla">💾 Guardar</button>
+                    <button onclick="clearTemplateData()" class="btn-small btn-delete" title="Limpiar Datos de Plantilla">🗑️ Limpiar</button>
                 </div>
             </div>
             <div class="card-content">
                 <!-- Email Headers -->
                 <div class="email-headers">
-                    <h3>📧 Email Headers</h3>
+                    <h3>📧 Encabezados del Correo</h3>
                     <div class="form-group">
-                        <label>From:</label>
+                        <label>De:</label>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="fromName">Name (Optional):</label>
-                            <input type="text" id="fromName" placeholder="Your Display Name" />
+                            <label for="fromName">Nombre (Opcional):</label>
+                            <input type="text" id="fromName" placeholder="Tu Nombre para Mostrar" />
                         </div>
                         <div class="form-group">
-                            <label for="fromEmail">Email:</label>
-                            <input type="email" id="fromEmail" placeholder="your-email@gmail.com" />
-                        </div>
-                    </div>
-                    <div class="form-row">
-                        <div class="form-group">
-                            <label for="toEmail">To Email:</label>
-                            <input type="email" id="toEmail" placeholder="recipient@example.com" />
-                        </div>
-                        <div class="form-group">
-                            <label for="ccEmail">CC Email (Optional):</label>
-                            <input type="email" id="ccEmail" placeholder="cc@example.com" />
+                            <label for="fromEmail">Correo Electrónico:</label>
+                            <input type="email" id="fromEmail" placeholder="tu-correo@gmail.com" />
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
-                            <label for="bccEmail">BCC Email (Optional):</label>
-                            <input type="email" id="bccEmail" placeholder="bcc@example.com" />
+                            <label for="toEmail">Destinatario:</label>
+                            <input type="email" id="toEmail" placeholder="destinatario@ejemplo.com" />
+                        </div>
+                        <div class="form-group">
+                            <label for="ccEmail">CC (Opcional):</label>
+                            <input type="email" id="ccEmail" placeholder="cc@ejemplo.com" />
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="bccEmail">BCC (Opcional):</label>
+                            <input type="email" id="bccEmail" placeholder="bcc@ejemplo.com" />
                         </div>
                         <div class="form-group">
                         </div>
                     </div>
                     <div class="form-group">
-                        <label for="emailSubject">Email Subject:</label>
-                        <input type="text" id="emailSubject" placeholder="Hello {{name}}!" />
+                        <label for="emailSubject">Asunto del Correo:</label>
+                        <input type="text" id="emailSubject" placeholder="Hola {{nombre}}!" />
                     </div>
                 </div>
 
                 <!-- Email Body -->
                 <div class="email-body">
-                    <h3>📝 Message Body</h3>
+                    <h3>📝 Cuerpo del Mensaje</h3>
                     <div class="form-group">
-                        <label for="emailBody">Email Content (HTML allowed):</label>
+                        <label for="emailBody">Contenido del Correo (HTML permitido):</label>
                         <div class="editor-toolbar">
-                            <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>B</b></button>
-                            <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>I</i></button>
-                            <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>U</u></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>N</b></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>C</i></button>
+                            <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>S</u></button>
                             <button onmousedown="event.preventDefault()" onclick="formatDoc('insertUnorderedList')">●</button>
                             <button onmousedown="event.preventDefault()" onclick="formatDoc('insertOrderedList')">1.</button>
                         </div>
-                        <div id="emailBody" class="rich-text-editor" contenteditable="true" placeholder="Hi {{name}},
-Thank you for your interest in {{product}}. We will contact you within {{timeframe}}.
-Best regards,
-Your Company">
+                        <div id="emailBody" class="rich-text-editor" contenteditable="true" placeholder="Hola {{nombre}},
+Gracias por tu interés en {{producto}}.
+
+Te contactaremos dentro de {{plazo}}.
+Atentamente,
+Tu Empresa">
                         </div>
                     </div>
                 </div>
 
                 <!-- Attachments -->
                 <div class="email-attachments">
-                    <h3>📎 Attachments for All</h3>
+                    <h3>📎 Adjuntos para Todos</h3>
                     <div class="form-group">
-                        <label for="emailAttachments">Select Files (for all emails):</label>
+                        <label for="emailAttachments">Seleccionar Archivos (para todos los correos):</label>
                         <select id="emailAttachments" multiple>
-                            <option value="">Select files to attach...</option>
+                            <option value="">Seleccionar archivos para adjuntar...</option>
                         </select><br>
-                        <small>Select multiple files using Ctrl+Click (Cmd+Click on Mac)</small>
+                        <small>Seleccionar múltiples archivos usando Ctrl+Clic (Cmd+Clic en Mac)</small>
                     </div>
-                    
+
                     <!-- Variable Attachments -->
-                    <h3>🔄 Attachments Variable</h3>
+                    <h3>🔄 Adjuntos Variables</h3>
                     <div class="form-group">
-                        <label for="variableAttachments">Data Source Column:</label>
-                        <input type="text" id="variableAttachments" placeholder="{{attachments}}" />
-                        <small>Use template variables like {{attachments}} to read from data column "attachments"</small>
+                        <label for="variableAttachments">Columna de Datos:</label>
+                        <input type="text" id="variableAttachments" placeholder="{{adjuntos}}" />
+                        <small>Usar variables de plantilla como {{adjuntos}} para leer de columna de datos "adjuntos"</small>
                     </div>
                     <div class="form-group">
-                        <label for="attachmentDelimiter">Delimiter (optional):</label>
+                        <label for="attachmentDelimiter">Delimitador (opcional):</label>
                         <input type="text" id="attachmentDelimiter" placeholder=";" maxlength="3" style="width: 100px;" />
-                        <small>Character used to split filenames (e.g., ";" for "file1.pdf;file2.pdf")</small>
+                        <small>Carácter usado para dividir nombres de archivos (ej., ";" para "archivo1.pdf;archivo2.pdf")</small>
                     </div>
                 </div>
             </div>
@@ -178,25 +180,25 @@ Your Company">
 
         <div id="data" class="tab-card">
             <div class="card-header">
-                <h2>📊 Data Source</h2>
+                <h2>📊 Fuente de Datos</h2>
                 <div class="header-buttons">
-                    <button onclick="saveData()" class="btn-small btn-save" title="Save Data">💾 Save</button>
-                    <button onclick="clearTable()" class="btn-small btn-delete" title="Clear Table">🗑️ Clear</button>
+                    <button onclick="saveData()" class="btn-small btn-save" title="Guardar Datos">💾 Guardar</button>
+                    <button onclick="clearTable()" class="btn-small btn-delete" title="Limpiar Tabla">🗑️ Limpiar</button>
                 </div>
             </div>
             <div class="card-content">
                 <!-- Table Editor Controls -->
                 <div class="table-controls">
                     <div class="control-group">
-                        <button onclick="addRow()" class="btn-small" title="Add Row">➕ Row</button>
-                        <button onclick="removeRow()" class="btn-small" title="Remove Row">➖ Row</button>
-                        <button onclick="addColumn()" class="btn-small" title="Add Column">➕ Column</button>
-                        <button onclick="removeColumn()" class="btn-small" title="Remove Column">➖ Column</button>
+                        <button onclick="addRow()" class="btn-small" title="Agregar Fila">➕ Fila</button>
+                        <button onclick="removeRow()" class="btn-small" title="Remover Fila">➖ Fila</button>
+                        <button onclick="addColumn()" class="btn-small" title="Agregar Columna">➕ Columna</button>
+                        <button onclick="removeColumn()" class="btn-small" title="Remover Columna">➖ Columna</button>
                     </div>
                     <div class="control-group">
-                        <button onclick="pasteFromClipboard()" class="btn-small" title="Paste from Clipboard">📋 Paste</button>
-                        <button onclick="importFromCSV()" class="btn-small" title="Import from CSV">📥 Import</button>
-                        <button onclick="exportToCSV()" class="btn-small" title="Export to CSV">📤 Export</button>
+                        <button onclick="pasteFromClipboard()" class="btn-small" title="Pegar del Portapapeles">📋 Pegar</button>
+                        <button onclick="importFromCSV()" class="btn-small" title="Importar desde CSV">📥 Importar</button>
+                        <button onclick="exportToCSV()" class="btn-small" title="Exportar a CSV">📤 Exportar</button>
                     </div>
                 </div>
 
@@ -208,8 +210,8 @@ Your Company">
                                 <tr>
                                     <th data-column="0" class="header-cell">
                                         <div class="header-content">
-                                            <span class="header-text" contenteditable="true">Column 1</span>
-                                            <button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button>
+                                            <span class="header-text" contenteditable="true">Columna 1</span>
+                                            <button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Eliminar Columna">×</button>
                                         </div>
                                     </th>
                                 </tr>
@@ -218,8 +220,8 @@ Your Company">
                                 <tr>
                                     <td data-row="0" data-column="0" class="data-cell">
                                         <div class="cell-content">
-                                            <span class="cell-text" contenteditable="true"></span> 
-                                            <button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button>
+                                            <span class="cell-text" contenteditable="true"></span>
+                                            <button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Eliminar Fila">×</button>
                                         </div>
                                     </td>
                                 </tr>
@@ -236,13 +238,13 @@ Your Company">
 
                 <!-- Table Editor Help -->
                 <div class="table-help">
-                    <h3>💡 Table Editor Tips</h3>
+                    <h3>💡 Consejos del Editor de Tabla</h3>
                     <ul>
-                        <li>Click on any cell to edit its content</li>
-                        <li>Click on column headers to rename them</li>
-                        <li>Use Tab or arrow keys to navigate between cells</li>
-                        <li>Paste Excel/CSV data directly into the table</li>
-                        <li>Scroll horizontally and vertically for large tables</li>
+                        <li>Haz clic en cualquier celda para editar su contenido</li>
+                        <li>Haz clic en los encabezados de columna para cambiarles el nombre</li>
+                        <li>Usa Tab o flechas para navegar entre celdas</li>
+                        <li>Pega datos de Excel/CSV directamente en la tabla</li>
+                        <li>Desplázate horizontal y verticalmente para tablas grandes</li>
                     </ul>
                 </div>
             </div>
@@ -250,26 +252,26 @@ Your Company">
 
         <div id="attachments" class="tab-card">
             <div class="card-header">
-                <h2>📎 Attachments</h2>
+                <h2>📎 Adjuntos</h2>
             </div>
             <div class="card-content">
                 <div class="upload-section">
                     <div class="form-group">
-                        <label for="fileUpload">Upload Attachment:</label>
+                        <label for="fileUpload">Subir Adjunto:</label>
                         <input type="file" id="fileUpload" multiple />
-                        <small>Supported formats: PDF, DOC, DOCX, TXT, JPG, PNG (max 10MB per file)</small>
+                        <small>Formatos soportados: PDF, DOC, DOCX, TXT, JPG, PNG (máx. 10MB por archivo)</small>
                     </div>
                     <div class="control-group">
-                        <button onclick="uploadFiles()">📤 Upload Files</button>
+                        <button onclick="uploadFiles()">📤 Subir Archivos</button>
                     </div>
                 </div>
 
                 <div class="attachments-list" id="attachmentsList">
                     <div class="attachments-list-header">
-                        <h3>📋 Uploaded Files</h3>
-                        <button onclick="clearAllAttachments()" class="btn-small btn-delete" title="Clear All Attachments">🗑️ Clear All</button>
+                        <h3>📋 Archivos Subidos</h3>
+                        <button onclick="clearAllAttachments()" class="btn-small btn-delete" title="Limpiar Todos los Adjuntos">🗑️ Limpiar Todos</button>
                     </div>
-                    <div id="attachmentsContent">No files uploaded yet</div>
+                    <div id="attachmentsContent">No se han subido archivos aún</div>
                 </div>
 
             </div>
@@ -277,24 +279,24 @@ Your Company">
 
         <div id="preview" class="tab-card">
             <div class="card-header">
-                <h2>👁️ Preview & Send</h2>
+                <h2>👁️ Vista Previa y Enviar</h2>
             </div>
             <div class="card-content">
                 <div class="actions-section">
-                    <button id="resetBtn" onclick="resetPreviewToOriginal()" class="btn-delete">↩️ Reset</button>
-                    <button id="sendBtn" onclick="sendEmails()">🚀 Send Emails</button>
+                    <button id="resetBtn" onclick="resetPreviewToOriginal()" class="btn-delete">↩️ Restablecer</button>
+                    <button id="sendBtn" onclick="sendEmails()">🚀 Enviar Correos</button>
                 </div>
 
                 <div class="preview-section" id="previewSection" style="display: none;">
-                    <h3>📬 Email Preview & Edit</h3>
+                    <h3>📬 Vista Previa de Correo y Edición</h3>
                     <div class="preview-navigation">
-                        <button id="prevEmail" onclick="navigateEmail(-1)" disabled>⬅️ Previous</button>
-                        <span id="emailCounter">Email 1 of 1</span>
-                        <button id="excludeEmailBtn" onclick="toggleExcludeEmail()" class="btn-small btn-exclude">Exclude</button>
-                        <button id="nextEmail" onclick="navigateEmail(1)" disabled>➡️ Next</button>
+                        <button id="prevEmail" onclick="navigateEmail(-1)" disabled>⬅️ Anterior</button>
+                        <span id="emailCounter">Correo 1 de 1</span>
+                        <button id="excludeEmailBtn" onclick="toggleExcludeEmail()" class="btn-small btn-exclude">Excluir</button>
+                        <button id="nextEmail" onclick="navigateEmail(1)" disabled>➡️ Siguiente</button>
                     </div>
                     <div class="sent-messages-list">
-                        <span id="sentMessagesList">Sending: All messages</span>
+                        <span id="sentMessagesList">Enviando: Todos los mensajes</span>
                     </div>
 
                     <!-- Editable Email Preview -->
@@ -303,19 +305,19 @@ Your Company">
                         <div class="preview-form">
                             <!-- Email Headers (Editable) -->
                             <div class="preview-field-group">
-                                <label>From</label>
+                                <label>De</label>
                             </div>
                             <div class="preview-field-row">
                                 <div class="preview-field-group">
-                                    <label>Name:</label>
+                                    <label>Nombre:</label>
                                     <input type="text" id="previewFromName" class="preview-input" />
-                                    <label>Email:</label>
+                                    <label>Correo:</label>
                                     <input type="email" id="previewFrom" class="preview-input" />
                                 </div>
                             </div>
                             <hr>
                             <div class="preview-field-group">
-                                <label>To:</label>
+                                <label>Para:</label>
                                 <input type="email" id="previewTo" class="preview-input" />
                             </div>
 
@@ -330,17 +332,17 @@ Your Company">
                             </div>
                             <hr>
                             <div class="preview-field-group">
-                                <label>Subject:</label>
+                                <label>Asunto:</label>
                                 <input type="text" id="previewSubject" class="preview-input" />
                             </div>
 
                             <!-- Message Body (Editable) -->
                             <div class="preview-field-group">
-                                <label>Message:</label>
+                                <label>Mensaje:</label>
                                 <div class="editor-toolbar">
-                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>B</b></button>
-                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>I</i></button>
-                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>U</u></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('bold')"><b>N</b></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('italic')"><i>C</i></button>
+                                    <button onmousedown="event.preventDefault()" onclick="formatDoc('underline')"><u>S</u></button>
                                     <button onmousedown="event.preventDefault()" onclick="formatDoc('insertUnorderedList')">●</button>
                                     <button onmousedown="event.preventDefault()" onclick="formatDoc('insertOrderedList')">1.</button>
                                 </div>
@@ -350,18 +352,18 @@ Your Company">
 
                             <!-- Attachments Section -->
                             <div class="preview-attachments-section">
-                                <label>Attachments:</label>
+                                <label>Adjuntos:</label>
                                 <div class="preview-attachments-list" id="previewAttachmentsList">
                                     <!-- Attachments will be populated here -->
                                 </div>
                                 <div class="preview-attachment-controls">
                                     <input type="file" id="previewFileUpload" multiple />
-                                    <button onclick="uploadPreviewFiles()" class="btn-small">📤 Upload Files</button>
+                                    <button onclick="uploadPreviewFiles()" class="btn-small">📤 Subir Archivos</button>
                                 </div>
                                 <div class="preview-attachment-picker">
-                                    <label for="previewAttachmentPicker">Add from available:</label>
+                                    <label for="previewAttachmentPicker">Agregar de disponibles:</label>
                                     <select id="previewAttachmentPicker" onchange="addAttachmentFromPicker()">
-                                        <option value="">Select attachment to add...</option>
+                                        <option value="">Seleccionar adjunto para agregar...</option>
                                         <!-- Available attachments will be populated here -->
                                     </select>
                                 </div>
@@ -376,11 +378,11 @@ Your Company">
         <!-- Results Tab -->
         <div id="results" class="tab-card">
             <div class="card-header">
-                <h2>📈 Send Results</h2>
+                <h2>📈 Resultados del Envío</h2>
             </div>
             <div class="card-content">
                 <div id="resultsContent">
-                    <p style="color: #666; font-style: italic;">Send emails from the "Preview" tab to see the results here.</p>
+                    <p style="color: #666; font-style: italic;">Envía correos desde la pestaña "Vista Previa" para ver los resultados aquí.</p>
                 </div>
             </div>
         </div>
@@ -390,7 +392,7 @@ Your Company">
     <div id="messageModal" class="modal" style="display: none;">
         <div class="modal-content">
             <span class="modal-close" onclick="closeMessageModal()">&times;</span>
-            <h3>Failed Message Details</h3>
+            <h3>Detalles del Mensaje Fallido</h3>
             <div id="modalMessageContent"></div>
         </div>
     </div>

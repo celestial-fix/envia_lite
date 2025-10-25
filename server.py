@@ -16,6 +16,7 @@ import subprocess
 import webbrowser
 import time
 import platform
+import urllib.parse
 
 from email import encoders
 from email.mime.text import MIMEText
@@ -359,7 +360,7 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
             self.send_error(404)
 
     def do_GET(self):
-        """Handle file requests (index.html, styles.css, script.js)"""
+        """Handle file requests (index.html, styles.css, script.js) with language support"""
         if self.path == '/favicon.ico':
             self.send_response(204)  # No Content
             self.end_headers()
@@ -370,26 +371,53 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
             self.send_json_response({'demoMode': DEMO_MODE})
             return
 
-        # Resolve path relative to where the script is running (or the PyInstaller bundle)
-        path_to_serve = self.path.lstrip('/')
-        if not path_to_serve or path_to_serve == '/':
-            path_to_serve = 'index.html'
+        # Parse the URL path
+        requested_path = self.path.lstrip('/')
+
+        # Extract language from path (e.g., "/es/" or "/en/")
+        lang = 'en'  # Default to English
+        if requested_path.startswith('es/'):
+            lang = 'es'
+            requested_path = requested_path[3:].lstrip('/')  # Remove "es/" prefix
+        elif requested_path.startswith('en/'):
+            lang = 'en'
+            requested_path = requested_path[3:].lstrip('/')  # Remove "en/" prefix
+
+        # Determine which file to serve based on the requested path and language
+        path_to_serve = 'index.html'  # Default fallback
+
+        if not requested_path or requested_path == '/':
+            # Serve language-specific index file
+            if lang == 'es':
+                path_to_serve = 'index-ES.html'  # Spanish file
+            else:
+                path_to_serve = 'index.html'     # English file (default)
+        elif requested_path == 'script.js':
+            # Serve language-specific script file
+            if lang == 'es':
+                path_to_serve = 'script-ES.js'  # Spanish script
+            else:
+                path_to_serve = 'script.js'    # English script (default)
+        else:
+            # For other resources (CSS, etc.), serve as-is
+            path_to_serve = requested_path
 
         try:
             full_path = resource_path(path_to_serve)
+
             if not os.path.exists(full_path):
-                self.send_error(404, 'File Not Found: %s' % self.path)
+                self.send_error(404, f'File Not Found: {path_to_serve}')
                 return
 
             self.send_response(200)
-            
+
             # Determine MIME type
             if path_to_serve.endswith('.html'):
-                self.send_header('Content-type', 'text/html')
+                self.send_header('Content-type', 'text/html; charset=utf-8')
             elif path_to_serve.endswith('.css'):
                 self.send_header('Content-type', 'text/css')
             elif path_to_serve.endswith('.js'):
-                self.send_header('Content-type', 'application/javascript')
+                self.send_header('Content-type', 'application/javascript; charset=utf-8')
             else:
                 self.send_header('Content-type', 'application/octet-stream')
 
@@ -401,6 +429,27 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
         except Exception as e:
             print(f"Error serving file {path_to_serve}: {e}")
             self.send_error(500, 'Internal Server Error')
+
+    def get_language_preference(self):
+        """Get language preference from URL parameter or browser settings"""
+        # Check for ?lang= parameter first (overrides everything)
+        parsed_url = urllib.parse.urlparse(self.path)
+        query_params = urllib.parse.parse_qs(parsed_url.query)
+        if 'lang' in query_params:
+            lang = query_params['lang'][0].lower()
+            if lang in ['en', 'es']:
+                return lang
+
+        # Check Accept-Language header for auto-detection
+        accept_lang = self.headers.get('Accept-Language', '')
+        if accept_lang:
+            # Parse Accept-Language header (e.g., "es-ES,en-US;q=0.9")
+            # Simple approach: look for 'es' first
+            if accept_lang.lower().startswith('es'):
+                return 'es'
+
+        # Default to English
+        return 'en'
 
     def send_json_response(self, data):
         """Helper to send a JSON response"""

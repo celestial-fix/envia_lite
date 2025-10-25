@@ -1,4 +1,4 @@
-// Envia lite - Personal Mail Merge Tool JavaScript
+// Envía lite - Herramienta Personal de Combinación de Correos JavaScript
 
 class EnvialiteApp {
     constructor() {
@@ -54,7 +54,7 @@ class EnvialiteApp {
         // Initialize table editor
         this.initializeTableEditor();
 
-        console.log('Envialite initialized');
+        console.log('Envía inicializado');
     }
 
     setupEventListeners() {
@@ -97,7 +97,7 @@ class EnvialiteApp {
                     try {
                         this.parsePastedData(event.target.result);
                     } catch (error) {
-                        this.showStatus(`Error processing CSV file: ${error.message}`, 'error');
+                        this.showStatus(`Error al procesar archivo CSV: ${error.message}`, 'error');
                     }
                 };
                 reader.readAsText(file);
@@ -130,20 +130,20 @@ class EnvialiteApp {
         try {
             const response = await fetch('/api/status');
             if (!response.ok) {
-                throw new Error('Server status endpoint not found.');
+                throw new Error('Endpoint de estado del servidor no encontrado.');
             }
             const data = await response.json();
             this.isServerInDemoMode = data.demoMode;
 
             const indicator = document.getElementById('demoModeIndicator');
             if (this.isServerInDemoMode) {
-                console.log('Server is in DEMO MODE.');
+                console.log('Servidor en MODO DEMO.');
                 if (indicator) indicator.style.display = 'inline-block';
             } else {
                 if (indicator) indicator.style.display = 'none';
             }
         } catch (error) {
-            console.error('Could not fetch server status:', error);
+            console.error('No se pudo obtener el estado del servidor:', error);
         }
     }
 
@@ -174,10 +174,10 @@ class EnvialiteApp {
 
             dataToSave.excludedEmailIndices = Array.from(this.excludedEmailIndices);
             localStorage.setItem('envialite_data', JSON.stringify(dataToSave));
-            this.showStatus('Data saved successfully!', 'success');
+            this.showStatus('¡Datos guardados exitosamente!', 'success');
         } catch (error) {
-            console.error('Error saving data:', error);
-            this.showStatus('Failed to save data.', 'error');
+            console.error('Error guardando datos:', error);
+            this.showStatus('Error al guardar datos.', 'error');
         }
     }
 
@@ -217,10 +217,24 @@ class EnvialiteApp {
                 this.attachmentDelimiter = data.attachmentDelimiter || ';';
 
                 this.excludedEmailIndices = new Set(data.excludedEmailIndices || []);
-                this.showStatus('Data loaded from browser', 'success');
+                this.showStatus('Datos cargados del navegador', 'success');
             }
         } catch (error) {
-            console.error('Error loading data:', error);
+            console.error('Error cargando datos:', error);
+        }
+    }
+
+    loadAttachments() {
+        try {
+            const saved = localStorage.getItem('envialite_attachments');
+            if (saved) {
+                const attachmentsArray = JSON.parse(saved);
+                this.attachments = new Map(attachmentsArray);
+                this.displayAttachments();
+                this.populateAttachmentsDropdown();
+            }
+        } catch (error) {
+            console.error('Error loading attachments:', error);
         }
     }
 
@@ -233,7 +247,7 @@ class EnvialiteApp {
         try {
             const lines = this.csvData.trim().split('\n');
             if (lines.length < 2) {
-                throw new Error('CSV must have at least a header row and one data row');
+                throw new Error('CSV debe tener al menos una fila de encabezado y una fila de datos');
             }
 
             const headers = lines[0].split(',').map(h => h.trim());
@@ -255,13 +269,46 @@ class EnvialiteApp {
             }
 
             if (this.recipients.length === 0) {
-                throw new Error('No data rows found in CSV. Please check your CSV format.');
+                throw new Error('No se encontraron filas de datos en CSV. Por favor verifica tu formato CSV.');
             }
 
             return this.recipients;
         } catch (error) {
-            throw new Error(`CSV parsing error: ${error.message}`);
+            throw new Error(`Error de análisis CSV: ${error.message}`);
         }
+    }
+
+    parsePastedData(text) {
+        // Try to detect delimiter (tab, comma, semicolon)
+        let delimiter = '\t'; // Default to tab
+        let rows = text.trim().split('\n');
+
+        if (rows.length > 0) {
+            const firstRow = rows[0];
+
+            // Detect delimiter by counting occurrences
+            const tabCount = (firstRow.match(/\t/g) || []).length;
+            const commaCount = (firstRow.match(/,/g) || []).length;
+            const semicolonCount = (firstRow.match(/;/g) || []).length;
+
+            if (commaCount > tabCount && commaCount > semicolonCount) {
+                delimiter = ',';
+            } else if (semicolonCount > tabCount && semicolonCount > commaCount) {
+                delimiter = ';';
+            }
+        }
+
+        // Parse rows
+        const dataRows = rows.map(row => row.split(delimiter).map(cell => cell.trim()));
+
+        if (dataRows.length === 0) {
+            this.showStatus('No data to paste', 'error');
+            return;
+        }
+
+        this.populateTableFromArray(dataRows);
+        this.updateCSVFromTable();
+        this.showStatus(`Pegados ${dataRows.length} filas y ${dataRows[0].length} columnas`, 'success');
     }
 
     isValidEmail(email) {
@@ -281,6 +328,72 @@ class EnvialiteApp {
         } catch (error) {
             console.error('Template merge error:', error);
             return template;
+        }
+    }
+
+    showStatus(message, type) {
+        // Remove existing status
+        const existingStatus = document.querySelector('.status-message');
+        if (existingStatus) {
+            existingStatus.remove();
+        }
+
+        // Create new status message
+        const statusDiv = document.createElement('div');
+        statusDiv.className = `status-message ${type}`;
+        statusDiv.innerHTML = `
+            <div class="${type}" style="
+                position: fixed;
+                top: 20px;
+                right: 20px;
+                background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
+                color: ${type === 'success' ? '#155724' : '#721c24'};
+                border: 1px solid ${type === 'success' ? '#c3e6cb' : '#f5c6cb'};
+                border-radius: 4px;
+                padding: 12px 16px;
+                z-index: 1000;
+                max-width: 300px;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            ">
+                ${message}
+            </div>
+        `;
+
+        document.body.appendChild(statusDiv);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            if (statusDiv.parentNode) {
+                statusDiv.remove();
+            }
+        }, 5000);
+    }
+
+    loadSmtpSettings() {
+        try {
+            const saved = localStorage.getItem('envialite_smtp_settings');
+            if (saved) {
+                const settings = JSON.parse(saved);
+
+                document.getElementById('smtpServer').value = settings.smtpServer || 'smtp.gmail.com';
+                document.getElementById('smtpPort').value = settings.smtpPort || 587;
+                document.getElementById('smtpUser').value = settings.smtpUser || '';
+                document.getElementById('smtpPassword').value = settings.smtpPassword || '';
+                document.getElementById('fromEmail').value = settings.fromEmail || '';
+                document.getElementById('fromName').value = settings.fromName || '';
+                document.getElementById('defaultSubject').value = settings.defaultSubject || '';
+
+                // Update instance variables
+                this.smtpServer = settings.smtpServer || 'smtp.gmail.com';
+                this.smtpPort = settings.smtpPort || 587;
+                this.smtpUser = settings.smtpUser || '';
+                this.smtpPassword = settings.smtpPassword || '';
+                this.fromEmail = settings.fromEmail || '';
+                this.fromName = settings.fromName || '';
+                this.subject = settings.defaultSubject || '';
+            }
+        } catch (error) {
+            console.error('Error loading SMTP settings:', error);
         }
     }
 
@@ -305,7 +418,7 @@ class EnvialiteApp {
 
             document.getElementById('previewSection').style.display = 'block';
 
-            this.showStatus(`Preview generated for ${this.recipients.length} emails`, 'success');
+            this.showStatus(`Vista previa generada para ${this.recipients.length} correos`, 'success');
 
         } catch (error) {
             this.showStatus(error.message, 'error');
@@ -505,7 +618,7 @@ class EnvialiteApp {
         this.displayPreviewAttachments();
         this.populateAttachmentPicker(); // Refresh to remove the added option
 
-        this.showStatus(`Added ${selectedFilename} to email`, 'success');
+        this.showStatus(`Agregado ${selectedFilename} al correo`, 'success');
     }
 
     populateEditablePreview(preview) {
@@ -517,8 +630,6 @@ class EnvialiteApp {
         document.getElementById('previewSubject').value = preview.subject || '';
         document.getElementById('previewBody').innerHTML = preview.body || '';
     }
-
-
 
     resetPreviewToOriginal() {
         const original = this.currentPreviewOriginal;
@@ -541,16 +652,16 @@ class EnvialiteApp {
         this.displayPreviewAttachments();
 
         this.excludedEmailIndices.clear(); // Clear exclusions when resetting
-        this.showStatus('Preview reset to original', 'success');
+        this.showStatus('Vista previa restablecida a original', 'success');
     }
 
     toggleExcludeEmail() {
         if (this.excludedEmailIndices.has(this.currentEmailIndex)) {
             this.excludedEmailIndices.delete(this.currentEmailIndex);
-            this.showStatus(`Email ${this.currentEmailIndex + 1} included in merge.`, 'success');
+            this.showStatus(`Correo ${this.currentEmailIndex + 1} incluido en la combinación.`, 'success');
         } else {
             this.excludedEmailIndices.add(this.currentEmailIndex);
-            this.showStatus(`Email ${this.currentEmailIndex + 1} excluded from merge.`, 'success');
+            this.showStatus(`Correo ${this.currentEmailIndex + 1} excluido de la combinación.`, 'success');
         }
         this.showCurrentEmailPreview(); // Refresh button state and list
         this.updateSentMessagesList();
@@ -574,7 +685,7 @@ class EnvialiteApp {
         }
 
         if (includedIndices.length === 0) {
-            sentMessagesListDiv.textContent = 'Sending: No messages selected.';
+            sentMessagesListDiv.textContent = 'Enviando: No hay mensajes seleccionados.';
             return;
         }
 
@@ -593,7 +704,7 @@ class EnvialiteApp {
         }
         ranges.push(start === end ? `${start}` : `${start}-${end}`);
 
-        sentMessagesListDiv.textContent = `Sending: ${ranges.join(', ')}`;
+        sentMessagesListDiv.textContent = `Enviando: ${ranges.join(', ')}`;
     }
 
     updateCSVFromPreviewChanges(preview) {
@@ -607,7 +718,7 @@ class EnvialiteApp {
         const files = fileInput.files;
 
         if (files.length === 0) {
-            this.showStatus('Please select files to upload', 'error');
+            this.showStatus('Selecciona archivos para subir', 'error');
             return;
         }
 
@@ -622,14 +733,14 @@ class EnvialiteApp {
                 uploadedCount++;
             } catch (error) {
                 console.error(`Error uploading ${file.name}:`, error);
-                this.showStatus(`Error uploading ${file.name}: ${error.message}`, 'error');
+                this.showStatus(`Error al subir ${file.name}: ${error.message}`, 'error');
             }
         }
 
         this.displayPreviewAttachments();
 
         if (uploadedCount > 0) {
-            this.showStatus(`Uploaded ${uploadedCount} files to preview`, 'success');
+            this.showStatus(`Subidos ${uploadedCount} archivos a la vista previa`, 'success');
         }
 
         // Clear file input
@@ -701,7 +812,7 @@ class EnvialiteApp {
         container.innerHTML = '';
 
         if (this.currentPreviewAttachments.size === 0) {
-            container.innerHTML = '<p style="color: #666; font-style: italic; margin: 0;">No attachments</p>';
+            container.innerHTML = '<p style="color: #666; font-style: italic; margin: 0;">Sin adjuntos</p>';
             return;
         }
 
@@ -716,10 +827,10 @@ class EnvialiteApp {
                 <div class="preview-attachment-icon">${icon}</div>
                 <div class="preview-attachment-info">
                     <div class="preview-attachment-name">${this.escapeHtml(filename)}</div>
-                    <div class="preview-attachment-details">${sizeFormatted} • ${fileData.type || 'Unknown type'}</div>
+                    <div class="preview-attachment-details">${sizeFormatted} • ${fileData.type || 'Tipo desconocido'}</div>
                 </div>
                 <div class="preview-attachment-actions">
-                    <button class="btn-small" onclick="removePreviewAttachment('${filename}')" title="Remove">🗑️</button>
+                    <button class="btn-small" onclick="removePreviewAttachment('${filename}')" title="Eliminar">🗑️</button>
                 </div>
             `;
 
@@ -739,7 +850,7 @@ class EnvialiteApp {
             }
 
             this.displayPreviewAttachments();
-            this.showStatus(`Removed ${filename} from preview`, 'success');
+            this.showStatus(`Eliminado ${filename} de la vista previa`, 'success');
         }
     }
 
@@ -772,7 +883,7 @@ class EnvialiteApp {
         const totalCount = this.emailPreviews.length;
         const emailCounter = document.getElementById('emailCounter');
         if (emailCounter) {
-            emailCounter.textContent = `Email ${this.currentEmailIndex + 1} of ${totalCount}`;
+            emailCounter.textContent = `Correo ${this.currentEmailIndex + 1} de ${totalCount}`;
         }
     }
 
@@ -803,7 +914,7 @@ class EnvialiteApp {
                         font-weight: bold;
                         z-index: 100;
                     ">
-                        ✅ Sent
+                        ✅ Enviado
                     </div>
                 `;
             } else if (preview.sendStatus === 'failed') {
@@ -821,7 +932,7 @@ class EnvialiteApp {
                         font-weight: bold;
                         z-index: 100;
                     ">
-                        ❌ Failed
+                        ❌ Falló
                     </div>
                 `;
             }
@@ -969,7 +1080,7 @@ class EnvialiteApp {
                     console.warn(`Variable attachment '${filename}' not found in uploaded attachments. Available files:`, Array.from(this.attachments.keys()));
                     // Show user-friendly warning if filename contains alphanumeric chars (avoid spam for template variables)
                     if (filename.match(/[a-zA-Z0-9]/)) {
-                        this.showStatus(`Warning: Attachment file '${filename}' not found. Make sure you've uploaded it in the Attachments tab.`, 'error');
+                        this.showStatus(`Advertencia: Archivo adjunto '${filename}' no encontrado. Asegúrate de haberlo subido en la pestaña Adjuntos.`, 'error');
                     }
                 }
             });
@@ -1010,14 +1121,14 @@ class EnvialiteApp {
                 this.getFormData();
 
                 if (!this.fromEmail) {
-                    this.showStatus('Please enter your email address', 'error');
+                    this.showStatus('Por favor ingresa tu dirección de correo electrónico', 'error');
                     return;
                 }
 
                 this.parseCSV();
 
                 if (this.recipients.length === 0) {
-                    this.showStatus('No valid recipients to send to', 'error');
+                    this.showStatus('No hay destinatarios válidos para enviar', 'error');
                     return;
                 }
 
@@ -1027,7 +1138,7 @@ class EnvialiteApp {
         } catch (error) {
             // This catch block will now primarily handle errors from the sending process itself
             this.setLoading(false);
-            this.showStatus(`Error sending emails: ${error.message}`, 'error');
+            this.showStatus(`Error al enviar correos: ${error.message}`, 'error');
         }
     }
 
@@ -1038,14 +1149,14 @@ class EnvialiteApp {
 
             // Validate we have recipients
             if (this.recipients.length === 0) {
-                this.showStatus('No valid recipients to send to', 'error');
+                this.showStatus('No hay destinatarios válidos para enviar', 'error');
                 return;
             }
 
             // Check if any preview emails have empty From addresses
             const emailsWithoutFrom = this.emailPreviews.filter(preview => !preview.from);
             if (emailsWithoutFrom.length > 0) {
-                this.showStatus(`Some emails are missing From address. Please check preview and ensure all emails have valid sender addresses.`, 'error');
+                this.showStatus(`Algunos correos no tienen dirección De. Por favor verifica la vista previa y asegúrate de que todos los correos tengan direcciones de remitente válidas.`, 'error');
                 return;
             }
 
@@ -1217,7 +1328,7 @@ class EnvialiteApp {
             } catch (parseError) {
                 console.error('JSON parse error:', parseError);
                 this.setLoading(false);
-                this.showStatus(`Server error: Invalid JSON response`, 'error');
+                this.showStatus(`Error del servidor: Respuesta JSON inválida`, 'error');
                 return;
             }
 
@@ -1232,7 +1343,7 @@ class EnvialiteApp {
 
         } catch (error) {
             this.setLoading(false);
-            this.showStatus(`Error sending emails: ${error.message}`, 'error');
+            this.showStatus(`Error al enviar correos: ${error.message}`, 'error');
         }
     }
 
@@ -1263,7 +1374,7 @@ class EnvialiteApp {
             resultDiv.innerHTML = `
                 <div class="result-header">
                     <div class="result-email">${statusIcon} ${resultIdentifier}</div>
-                    <div class="result-status">${result.success ? 'Sent successfully' : 'Failed to send'}</div>
+                    <div class="result-status">${result.success ? 'Enviado exitosamente' : 'Error al enviar'}</div>
                     ${errorText}
                 </div>
                 <div class="result-details expandable-collapsed" style="display: none;"></div>
@@ -1312,19 +1423,19 @@ class EnvialiteApp {
         const bodyContent = this.escapeHtml(message.body);
 
         if (result.success) {
-            modalTitle.textContent = `📧 Sent Message Details`;
+            modalTitle.textContent = `📧 Detalles del Mensaje Enviado`;
             contentDiv.innerHTML = `
                 <div class="message-details-grid">
                     <div class="message-field">
-                        <label>To:</label>
+                        <label>Para:</label>
                         <span>${this.escapeHtml(message.to || 'N/A')}</span>
                     </div>
                     <div class="message-field">
-                        <label>From:</label>
+                        <label>De:</label>
                         <span>${this.escapeHtml(message.from || 'N/A')}</span>
                     </div>
                     <div class="message-field">
-                        <label>Subject:</label>
+                        <label>Asunto:</label>
                         <span>${this.escapeHtml(message.subject || 'N/A')}</span>
                     </div>
                     <div class="message-field">
@@ -1338,17 +1449,17 @@ class EnvialiteApp {
                 </div>
                 <hr>
                 <div class="message-body-section">
-                    <label>Message Body:</label>
+                    <label>Cuerpo del Mensaje:</label>
                     <pre class="message-body">${bodyContent}</pre>
                 </div>
                 ${message.attachments && message.attachments.length > 0 ? `
                     <hr>
                     <div class="message-attachments-section">
-                        <label>Attachments:</label>
+                        <label>Adjuntos:</label>
                         <div class="attachment-list">
                             ${message.attachments.map(att => `
                                 <div class="message-attachment-item">
-                                    📎 ${this.escapeHtml(att.filename || 'Unknown file')}
+                                    📎 ${this.escapeHtml(att.filename || 'Archivo desconocido')}
                                     ${att.size ? ` (${this.formatFileSize(att.size)})` : ''}
                                 </div>
                             `).join('')}
@@ -1357,31 +1468,31 @@ class EnvialiteApp {
                 ` : ''}
             `;
         } else {
-            modalTitle.textContent = `❌ Failed Message Details`;
+            modalTitle.textContent = `❌ Detalles del Mensaje Fallido`;
             contentDiv.innerHTML = `
                 <div class="message-details-grid">
                     <div class="message-field">
-                        <label>To:</label>
+                        <label>Para:</label>
                         <span>${this.escapeHtml(message.to || 'N/A')}</span>
                     </div>
                     <div class="message-field">
-                        <label>From:</label>
+                        <label>De:</label>
                         <span>${this.escapeHtml(message.from || 'N/A')}</span>
                     </div>
                     <div class="message-field">
-                        <label>Subject:</label>
+                        <label>Asunto:</label>
                         <span>${this.escapeHtml(message.subject || 'N/A')}</span>
                     </div>
                 </div>
                 <hr>
                 <div class="message-body-section">
-                    <label>Message Body:</label>
+                    <label>Cuerpo del Mensaje:</label>
                     <pre class="message-body">${bodyContent}</pre>
                 </div>
                 <hr>
                 <div class="error-section">
                     <label style="color: #dc3545;">❌ Error:</label>
-                    <div class="error-message">${this.escapeHtml(result.error || 'Unknown error')}</div>
+                    <div class="error-message">${this.escapeHtml(result.error || 'Error desconocido')}</div>
                 </div>
             `;
         }
@@ -1470,8 +1581,8 @@ class EnvialiteApp {
         console.log('Populating details div with content');
 
         const statusNote = message.fromPreview ?
-            '<p style="color: #856404; font-size: 12px; font-style: italic; font-weight: bold;">📧 (Showing preview data)</p>' :
-            '<p style="color: #28a745; font-size: 12px; font-style: italic; font-weight: bold;">✅ (Email sent successfully)</p>';
+            '<p style="color: #856404; font-size: 12px; font-style: italic; font-weight: bold;">📧 (Mostrando datos de vista previa)</p>' :
+            '<p style="color: #28a745; font-size: 12px; font-style: italic; font-weight: bold;">✅ (Correo enviado exitosamente)</p>';
 
         // Make sure we have some data to show
         const hasData = message.to !== 'N/A' || message.from !== 'N/A' || message.subject !== 'N/A';
@@ -1480,8 +1591,8 @@ class EnvialiteApp {
         if (!hasData) {
             detailsHTML = `
                 <div class="result-preview-info">
-                    <p>No email data available for this result.</p>
-                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ View Full Message</button>
+                    <p>No hay datos de correo disponibles para este resultado.</p>
+                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ Ver Mensaje Completo</button>
                 </div>
             `;
         } else {
@@ -1489,25 +1600,25 @@ class EnvialiteApp {
             if (message.attachments && message.attachments.length > 0) {
                 if (message.attachments.length === 1) {
                     const attachment = message.attachments[0];
-                    attachmentInfo = `<p><strong>Attachment:</strong> 📎 ${this.escapeHtml(attachment.filename)}${attachment.size ? ` (${this.formatFileSize(attachment.size)})` : ''}</p>`;
+                    attachmentInfo = `<p><strong>Adjunto:</strong> 📎 ${this.escapeHtml(attachment.filename)}${attachment.size ? ` (${this.formatFileSize(attachment.size)})` : ''}</p>`;
                 } else {
-                    attachmentInfo = `<p><strong>Attachments:</strong> 📎 ${message.attachments.length} files</p>`;
+                    attachmentInfo = `<p><strong>Adjuntos:</strong> 📎 ${message.attachments.length} archivos</p>`;
                 }
             }
 
             detailsHTML = `
                 <div class="result-preview-info">
-                    <p><strong>To:</strong> ${this.escapeHtml(message.to || 'N/A')}</p>
-                    <p><strong>From:</strong> ${this.escapeHtml(message.from || 'N/A')}</p>
-                    <p><strong>Subject:</strong> ${this.escapeHtml(message.subject || 'N/A')}</p>
+                    <p><strong>Para:</strong> ${this.escapeHtml(message.to || 'N/A')}</p>
+                    <p><strong>De:</strong> ${this.escapeHtml(message.from || 'N/A')}</p>
+                    <p><strong>Asunto:</strong> ${this.escapeHtml(message.subject || 'N/A')}</p>
                     ${message.body && message.body !== 'No message data available' ?
-                        `<p><strong>Body:</strong> ${this.escapeHtml(message.body.substring(0, 100))}${message.body.length > 100 ? '...' : ''}</p>` : ''
+                        `<p><strong>Cuerpo:</strong> ${this.escapeHtml(message.body.substring(0, 100))}${message.body.length > 100 ? '...' : ''}</p>` : ''
                     }
                     ${attachmentInfo}
                     ${statusNote}
                 </div>
                 <div class="result-actions">
-                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ View Full Message</button>
+                    <button class="btn-small btn-view-full" onclick="event.stopPropagation(); window.envialiteApp.showMessageDetails(${index});">👁️ Ver Mensaje Completo</button>
                 </div>
             `;
         }
@@ -1546,55 +1657,16 @@ class EnvialiteApp {
         const sendBtn = document.getElementById('sendBtn');
 
         if (loading) {
-            sendBtn.innerHTML = '<span class="spinner"></span>Sending...';
+            sendBtn.innerHTML = '<span class="spinner"></span>Enviando...';
             sendBtn.disabled = true;
             document.body.classList.add('loading');
         } else {
-            sendBtn.innerHTML = '🚀 Send Emails';
+            sendBtn.innerHTML = '🚀 Enviar Correos';
             sendBtn.disabled = false;
             document.body.classList.remove('loading');
         }
     }
 
-    showStatus(message, type) {
-        // Remove existing status
-        const existingStatus = document.querySelector('.status-message');
-        if (existingStatus) {
-            existingStatus.remove();
-        }
-
-        // Create new status message
-        const statusDiv = document.createElement('div');
-        statusDiv.className = `status-message ${type}`;
-        statusDiv.innerHTML = `
-            <div class="${type}" style="
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                background: ${type === 'success' ? '#d4edda' : '#f8d7da'};
-                color: ${type === 'success' ? '#155724' : '#721c24'};
-                border: 1px solid ${type === 'success' ? '#c3e6cb' : '#f5c6cb'};
-                border-radius: 4px;
-                padding: 12px 16px;
-                z-index: 1000;
-                max-width: 300px;
-                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            ">
-                ${message}
-            </div>
-        `;
-
-        document.body.appendChild(statusDiv);
-
-        // Auto-remove after 5 seconds
-        setTimeout(() => {
-            if (statusDiv.parentNode) {
-                statusDiv.remove();
-            }
-        }, 5000);
-    }
-
-    // SMTP Settings Management
     saveSmtpSettings() {
         const settings = {
             smtpServer: document.getElementById('smtpServer').value,
@@ -1603,12 +1675,11 @@ class EnvialiteApp {
             smtpPassword: document.getElementById('smtpPassword').value,
             fromEmail: document.getElementById('fromEmail').value,
             fromName: document.getElementById('fromName').value,
-            defaultSubject: document.getElementById('defaultSubject').value,
             timestamp: new Date().toISOString()
         };
 
         localStorage.setItem('envialite_smtp_settings', JSON.stringify(settings));
-        this.showStatus('SMTP settings saved', 'success');
+        this.showStatus('Configuración SMTP guardada', 'success');
     }
 
     clearAccountSettings() {
@@ -1643,7 +1714,7 @@ class EnvialiteApp {
             testResult.innerHTML = '';
         }
 
-        this.showStatus('Account settings cleared', 'success');
+        this.showStatus('Configuración de cuenta limpiada', 'success');
     }
 
     clearTemplateData() {
@@ -1696,7 +1767,7 @@ class EnvialiteApp {
         // Hide preview section
         document.getElementById('previewSection').style.display = 'none';
 
-        this.showStatus('Template data cleared', 'success');
+        this.showStatus('Datos de plantilla limpiados', 'success');
     }
 
     clearAllAttachments() {
@@ -1722,35 +1793,7 @@ class EnvialiteApp {
         // Update preview attachments display if preview is active
         this.displayPreviewAttachments();
 
-        this.showStatus('All attachments cleared', 'success');
-    }
-
-    loadSmtpSettings() {
-        try {
-            const saved = localStorage.getItem('envialite_smtp_settings');
-            if (saved) {
-                const settings = JSON.parse(saved);
-
-                document.getElementById('smtpServer').value = settings.smtpServer || 'smtp.gmail.com';
-                document.getElementById('smtpPort').value = settings.smtpPort || 587;
-                document.getElementById('smtpUser').value = settings.smtpUser || '';
-                document.getElementById('smtpPassword').value = settings.smtpPassword || '';
-                document.getElementById('fromEmail').value = settings.fromEmail || '';
-                document.getElementById('fromName').value = settings.fromName || '';
-                document.getElementById('defaultSubject').value = settings.defaultSubject || '';
-
-                // Update instance variables
-                this.smtpServer = settings.smtpServer || 'smtp.gmail.com';
-                this.smtpPort = settings.smtpPort || 587;
-                this.smtpUser = settings.smtpUser || '';
-                this.smtpPassword = settings.smtpPassword || '';
-                this.fromEmail = settings.fromEmail || '';
-                this.fromName = settings.fromName || '';
-                this.subject = settings.defaultSubject || '';
-            }
-        } catch (error) {
-            console.error('Error loading SMTP settings:', error);
-        }
+        this.showStatus('Todos los adjuntos limpiados', 'success');
     }
 
     async testSmtpConnection() {
@@ -1760,18 +1803,18 @@ class EnvialiteApp {
             // If server is in demo mode, simulate a successful connection.
             if (this.isServerInDemoMode) {
                 const testResult = document.getElementById('smtpTestResult');
-                testResult.innerHTML = '<span style="color: #28a745;">Demo Mode will not test connections</span>';
-                this.showStatus('SMTP connection is in demo mode.', 'success');
+                testResult.innerHTML = '<span style="color: #28a745;">El modo demo no prueba conexiones</span>';
+                this.showStatus('La conexión SMTP está en modo demo.', 'success');
                 return;
             }
 
             if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
-                this.showStatus('Please fill in all SMTP settings', 'error');
+                this.showStatus('Por favor rellena toda la configuración SMTP', 'error');
                 return;
             }
 
             const testResult = document.getElementById('smtpTestResult');
-            testResult.innerHTML = '<span style="color: #ffc107;">Testing...</span>';
+            testResult.innerHTML = '<span style="color: #ffc107;">Probando...</span>';
 
             const response = await fetch('/test-smtp', {
                 method: 'POST',
@@ -1792,8 +1835,8 @@ class EnvialiteApp {
                 result = JSON.parse(responseText);
             } catch (parseError) {
                 console.error('JSON parse error:', parseError);
-                testResult.innerHTML = '<span style="color: #dc3545;">❌ Invalid response</span>';
-                this.showStatus(`Server error: Invalid JSON response`, 'error');
+                testResult.innerHTML = '<span style="color: #dc3545;">❌ Respuesta inválida</span>';
+                this.showStatus(`Error del servidor: Respuesta JSON inválida`, 'error');
                 return;
             }
 
@@ -1802,15 +1845,15 @@ class EnvialiteApp {
                 this.smtpConnectionTested = true;
                 this.smtpConnectionValid = true;
 
-                testResult.innerHTML = '<span style="color: #28a745;">✅ Connection successful!</span>';
-                this.showStatus('SMTP connection test passed', 'success');
+                testResult.innerHTML = '<span style="color: #28a745;">✅ Conexión exitosa!</span>';
+                this.showStatus('Prueba de conexión SMTP pasada', 'success');
             } else {
                 // Mark as tested but invalid
                 this.smtpConnectionTested = true;
                 this.smtpConnectionValid = false;
 
-                testResult.innerHTML = '<span style="color: #dc3545;">❌ Connection failed</span>';
-                this.showStatus(`SMTP test failed: ${result.error}`, 'error');
+                testResult.innerHTML = '<span style="color: #dc3545;">❌ Conexión fallida</span>';
+                this.showStatus(`Prueba SMTP fallida: ${result.error}`, 'error');
             }
 
         } catch (error) {
@@ -1818,8 +1861,8 @@ class EnvialiteApp {
             this.smtpConnectionTested = true;
             this.smtpConnectionValid = false;
 
-            document.getElementById('smtpTestResult').innerHTML = '<span style="color: #dc3545;">❌ Test failed</span>';
-            this.showStatus(`SMTP test error: ${error.message}`, 'error');
+            document.getElementById('smtpTestResult').innerHTML = '<span style="color: #dc3545;">❌ Prueba fallida</span>';
+            this.showStatus(`Error en prueba SMTP: ${error.message}`, 'error');
         }
     }
 
@@ -1827,10 +1870,10 @@ class EnvialiteApp {
         this.getSmtpSettings();
 
         if (!this.smtpServer || !this.smtpUser || !this.smtpPassword) {
-            return { success: false, error: 'Please fill in all SMTP settings.' };
+            return { success: false, error: 'Por favor rellena toda la configuración SMTP.' };
         }
 
-        // In server demo mode, the test endpoint will simulate success, so we just call it.
+        // If in server demo mode, the test endpoint will simulate success, so we just call it.
 
         try {
             const response = await fetch('/test-smtp', {
@@ -1845,7 +1888,7 @@ class EnvialiteApp {
             });
 
             if (!response.ok) {
-                return { success: false, error: `Server returned an error: ${response.statusText}` };
+                return { success: false, error: `El servidor devolvió un error: ${response.statusText}` };
             }
 
             const result = await response.json();
@@ -1858,7 +1901,7 @@ class EnvialiteApp {
         } catch (error) {
             this.smtpConnectionTested = true;
             this.smtpConnectionValid = false;
-            return { success: false, error: `A network error occurred: ${error.message}` };
+            return { success: false, error: `Se produjo un error de red: ${error.message}` };
         }
     }
 
@@ -1874,19 +1917,19 @@ class EnvialiteApp {
 
         // Check if SMTP server is configured
         if (!smtpServer) {
-            this.showStatus('Please configure SMTP server settings before sending emails. Go to Settings tab and fill in your SMTP details.', 'error');
+            this.showStatus('Por favor configura el servidor SMTP antes de enviar correos. Ve a la pestaña Configuración y rellena tus detalles SMTP.', 'error');
             return false;
         }
 
         // Check if SMTP username is configured
         if (!smtpUser) {
-            this.showStatus('Please enter your SMTP username in the Settings tab before sending emails.', 'error');
+            this.showStatus('Por favor ingresar tu usuario SMTP en la pestaña Cuenta antes de enviar correos.', 'error');
             return false;
         }
 
         // Check if SMTP password is configured
         if (!smtpPassword) {
-            this.showStatus('Please enter your SMTP password in the Settings tab before sending emails.', 'error');
+            this.showStatus('Por favor ingresa tu contraseña SMTP en la pestaña Cuenta antes de enviar correos.', 'error');
             return false;
         }
 
@@ -1914,7 +1957,7 @@ class EnvialiteApp {
     // Attachment Management Methods
     async uploadFiles() {
         if (this.isServerInDemoMode) {
-            this.showStatus('File upload is disabled in Demo Mode.', 'error');
+            this.showStatus('Subida de archivos deshabilitada en Modo Demo.', 'error');
             return;
         }
 
@@ -1922,7 +1965,7 @@ class EnvialiteApp {
         const files = fileInput.files;
 
         if (files.length === 0) {
-            this.showStatus('Please select files to upload', 'error');
+            this.showStatus('Por favor selecciona archivos para subir', 'error');
             return;
         }
 
@@ -1932,13 +1975,13 @@ class EnvialiteApp {
         for (const file of files) {
             try {
                 if (file.size > 10 * 1024 * 1024) { // 10MB limit
-                    throw new Error(`File ${file.name} is too large (max 10MB)`);
+                    throw new Error(`Archivo ${file.name} muy grande (máx. 10MB)`);
                 }
 
                 await this.addAttachment(file);
                 uploadedCount++;
             } catch (error) {
-                console.error(`Error uploading ${file.name}:`, error);
+                console.error(`Error subiendo ${file.name}:`, error);
                 errorCount++;
             }
         }
@@ -1947,9 +1990,9 @@ class EnvialiteApp {
         this.saveAttachments();
         this.populateAttachmentsDropdown();
 
-        const message = `Uploaded ${uploadedCount} files`;
+        const message = `Subidos ${uploadedCount} archivos`;
         if (errorCount > 0) {
-            message += `, ${errorCount} failed`;
+            message += `, ${errorCount} fallidos`;
         }
         this.showStatus(message, errorCount > 0 ? 'error' : 'success');
 
@@ -1978,7 +2021,7 @@ class EnvialiteApp {
                 }
             };
 
-            reader.onerror = () => reject(new Error('Failed to read file'));
+            reader.onerror = () => reject(new Error('Error leyendo archivo'));
             reader.readAsDataURL(file);
         });
     }
@@ -1989,7 +2032,7 @@ class EnvialiteApp {
             this.displayAttachments();
             this.saveAttachments();
             this.populateAttachmentsDropdown();
-            this.showStatus(`Deleted ${filename}`, 'success');
+            this.showStatus(`Eliminado ${filename}`, 'success');
         }
     }
 
@@ -2015,7 +2058,7 @@ class EnvialiteApp {
         const container = document.getElementById('attachmentsContent');
 
         if (this.attachments.size === 0) {
-            container.innerHTML = '<p style="color: #666; font-style: italic;">No files uploaded yet</p>';
+            container.innerHTML = '<p style="color: #666; font-style: italic;">No se han subido archivos aún</p>';
             return;
         }
 
@@ -2034,15 +2077,16 @@ class EnvialiteApp {
                     <div class="attachment-name">${this.escapeHtml(filename)}</div>
                     <div class="attachment-details">
                         <span class="attachment-size">${sizeFormatted}</span>
-                        <span style="margin-left: 10px; color: #666;">${fileData.type || 'Unknown type'}</span>
+                        <span style="margin-left: 10px; color: #666;">${fileData.type || 'Tipo desconocido'}</span>
                     </div>
                 </div>
                 <div class="attachment-actions">
-                    <button class="btn-small" onclick="downloadAttachment('${filename}')" title="Download">
+                    <button class="btn-small" onclick="downloadAttachment('${filename}')" title="Descargar">
                         📥
                     </button>
-                    <button class="btn-small btn-delete" onclick="deleteAttachment('${filename}')" title="Delete">
+                    <button class="btn-small btn-delete" onclick="deleteAttachment('${filename}')" title="Eliminar">
                         🗑️
+
                     </button>
                 </div>
             `;
@@ -2054,7 +2098,7 @@ class EnvialiteApp {
     getFileIcon(filename) {
         // Handle case where filename might be undefined
         if (!filename) {
-            console.error('getFileIcon called with undefined filename');
+            console.error('getFileIcon llamado con filename indefinido');
             return '📎';
         }
 
@@ -2103,22 +2147,8 @@ class EnvialiteApp {
             const attachmentsArray = Array.from(this.attachments.entries());
             localStorage.setItem('envialite_attachments', JSON.stringify(attachmentsArray));
         } catch (error) {
-            console.error('Error saving attachments:', error);
-            this.showStatus('Error saving attachments', 'error');
-        }
-    }
-
-    loadAttachments() {
-        try {
-            const saved = localStorage.getItem('envialite_attachments');
-            if (saved) {
-                const attachmentsArray = JSON.parse(saved);
-                this.attachments = new Map(attachmentsArray);
-                this.displayAttachments();
-                this.populateAttachmentsDropdown();
-            }
-        } catch (error) {
-            console.error('Error loading attachments:', error);
+            console.error('Error guardando adjuntos:', error);
+            this.showStatus('Error guardando adjuntos', 'error');
         }
     }
 
@@ -2326,13 +2356,13 @@ class EnvialiteApp {
             newCell.className = 'data-cell';
             newCell.dataset.row = tbody.rows.length;
             newCell.dataset.column = i;
-            newCell.innerHTML = '<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(' + tbody.rows.length + ')" title="Delete Row">×</button></div>';
+            newCell.innerHTML = '<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(' + tbody.rows.length + ')" title="Eliminar Fila">×</button></div>';
             newRow.appendChild(newCell);
         }
 
         tbody.appendChild(newRow);
         this.updateCSVFromTable();
-        this.showStatus('Row added', 'success');
+        this.showStatus('Fila agregada', 'success');
     }
 
     removeRow() {
@@ -2340,13 +2370,13 @@ class EnvialiteApp {
         const tbody = table.querySelector('tbody');
 
         if (tbody.rows.length <= 1) {
-            this.showStatus('Cannot remove the last data row', 'error');
+            this.showStatus('No se puede eliminar la última fila de datos', 'error');
             return;
         }
 
         tbody.deleteRow(-1);
         this.updateCSVFromTable();
-        this.showStatus('Row removed', 'success');
+        this.showStatus('Fila eliminada', 'success');
     }
 
     addColumn() {
@@ -2359,7 +2389,7 @@ class EnvialiteApp {
         const headerCell = document.createElement('th');
         headerCell.className = 'header-cell';
         headerCell.dataset.column = columnIndex;
-        headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">Column ${columnIndex + 1}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${columnIndex})" title="Delete Column">×</button></div>`;
+        headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">Columna ${columnIndex + 1}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${columnIndex})" title="Eliminar Columna">×</button></div>`;
         headerRow.appendChild(headerCell);
 
         // Add data cells to each row
@@ -2368,12 +2398,12 @@ class EnvialiteApp {
             dataCell.className = 'data-cell';
             dataCell.dataset.row = rowIndex;
             dataCell.dataset.column = columnIndex;
-            dataCell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${rowIndex})" title="Delete Row">×</button></div>`;
+            dataCell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${rowIndex})" title="Eliminar Fila">×</button></div>`;
             row.appendChild(dataCell);
         });
 
         this.updateCSVFromTable();
-        this.showStatus('Column added', 'success');
+        this.showStatus('Columna agregada', 'success');
     }
 
     removeColumn() {
@@ -2381,7 +2411,7 @@ class EnvialiteApp {
         const headerRow = table.querySelector('thead tr');
 
         if (headerRow.cells.length <= 1) {
-            this.showStatus('Cannot remove the last column', 'error');
+            this.showStatus('No se puede eliminar la última columna', 'error');
             return;
         }
 
@@ -2395,7 +2425,7 @@ class EnvialiteApp {
         });
 
         this.updateCSVFromTable();
-        this.showStatus('Column removed', 'success');
+        this.showStatus('Columna eliminada', 'success');
     }
 
     async pasteFromClipboard() {
@@ -2403,41 +2433,8 @@ class EnvialiteApp {
             const text = await navigator.clipboard.readText();
             this.parsePastedData(text);
         } catch (error) {
-            this.showStatus('Failed to read clipboard. Please use Ctrl+V to paste.', 'error');
+            this.showStatus('Error leyendo el portapapeles. Por favor usa Ctrl+V para pegar.', 'error');
         }
-    }
-
-    parsePastedData(text) {
-        // Try to detect delimiter (tab, comma, semicolon)
-        let delimiter = '\t'; // Default to tab
-        let rows = text.trim().split('\n');
-
-        if (rows.length > 0) {
-            const firstRow = rows[0];
-
-            // Detect delimiter by counting occurrences
-            const tabCount = (firstRow.match(/\t/g) || []).length;
-            const commaCount = (firstRow.match(/,/g) || []).length;
-            const semicolonCount = (firstRow.match(/;/g) || []).length;
-
-            if (commaCount > tabCount && commaCount > semicolonCount) {
-                delimiter = ',';
-            } else if (semicolonCount > tabCount && semicolonCount > commaCount) {
-                delimiter = ';';
-            }
-        }
-
-        // Parse rows
-        const dataRows = rows.map(row => row.split(delimiter).map(cell => cell.trim()));
-
-        if (dataRows.length === 0) {
-            this.showStatus('No data to paste', 'error');
-            return;
-        }
-
-        this.populateTableFromArray(dataRows);
-        this.updateCSVFromTable();
-        this.showStatus(`Pasted ${dataRows.length} rows and ${dataRows[0].length} columns`, 'success');
     }
 
     populateTableFromArray(dataArray) {
@@ -2457,7 +2454,7 @@ class EnvialiteApp {
             const headerCell = document.createElement('th');
             headerCell.className = 'header-cell';
             headerCell.dataset.column = index;
-            headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">${header || `Column ${index + 1}`}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${index})" title="Delete Column">×</button></div>`;
+            headerCell.innerHTML = `<div class="header-content"><span class="header-text" contenteditable="true">${header || `Columna ${index + 1}`}</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(${index})" title="Eliminar Columna">×</button></div>`;
             headerRow.appendChild(headerCell);
         });
 
@@ -2471,7 +2468,7 @@ class EnvialiteApp {
                 cell.className = 'data-cell';
                 cell.dataset.row = i - 1;
                 cell.dataset.column = j;
-                cell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true">${rowData[j] || ''}</span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${i - 1})" title="Delete Row">×</button></div>`;
+                cell.innerHTML = `<div class="cell-content"><span class="cell-text" contenteditable="true">${rowData[j] || ''}</span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(${i - 1})" title="Eliminar Fila">×</button></div>`;
                 row.appendChild(cell);
             }
 
@@ -2491,7 +2488,7 @@ class EnvialiteApp {
             const dataRows = rows.map(row => row.split(',').map(cell => cell.trim()));
             this.populateTableFromArray(dataRows);
         } catch (error) {
-            console.error('Error updating table from CSV:', error);
+            console.error('Error actualizando tabla desde CSV:', error);
         }
     }
 
@@ -2533,13 +2530,13 @@ class EnvialiteApp {
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'data-source.csv';
+        a.download = 'datos-fuente.csv';
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         window.URL.revokeObjectURL(url);
 
-        this.showStatus('CSV file exported', 'success');
+        this.showStatus('Archivo CSV exportado', 'success');
     }
 
     clearTable() {
@@ -2548,12 +2545,12 @@ class EnvialiteApp {
         const headerRow = table.querySelector('thead tr');
 
         // Keep one header and one data row, update onclick and tabindex handlers
-        headerRow.innerHTML = '<th data-column="0" class="header-cell"><div class="header-content"><span class="header-text" contenteditable="true">Column 1</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Delete Column">×</button></div></th>';
-        tbody.innerHTML = '<tr><td data-row="0" data-column="0" class="data-cell"><div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Delete Row">×</button></div></td></tr>';
+        headerRow.innerHTML = '<th data-column="0" class="header-cell"><div class="header-content"><span class="header-text" contenteditable="true">Columna 1</span><button class="delete-column-btn" tabindex="-1" onclick="window.envialiteApp.deleteColumnByIndex(0)" title="Eliminar Columna">×</button></div></th>';
+        tbody.innerHTML = '<tr><td data-row="0" data-column="0" class="data-cell"><div class="cell-content"><span class="cell-text" contenteditable="true"></span><button class="delete-row-btn" tabindex="-1" onclick="window.envialiteApp.deleteRowByIndex(0)" title="Eliminar Fila">×</button></div></td></tr>';
 
         this.csvData = '';
         document.getElementById('csvData').value = '';
-        this.showStatus('Table cleared', 'success');
+        this.showStatus('Tabla limpiada', 'success');
     }
 
     deleteColumnByIndex(columnIndex) {
@@ -2563,7 +2560,7 @@ class EnvialiteApp {
 
         // Check if this is the last column
         if (headerRow.cells.length <= 1) {
-            this.showStatus('Cannot delete the last column', 'error');
+            this.showStatus('No se puede eliminar la última columna', 'error');
             return;
         }
 
@@ -2581,7 +2578,7 @@ class EnvialiteApp {
         this.updateCellAttributes();
 
         this.updateCSVFromTable();
-        this.showStatus('Column deleted', 'success');
+        this.showStatus('Columna eliminada', 'success');
     }
 
     deleteRowByIndex(rowIndex) {
@@ -2590,7 +2587,7 @@ class EnvialiteApp {
 
         // Check if this is the last row
         if (tbody.rows.length <= 1) {
-            this.showStatus('Cannot delete the last row', 'error');
+            this.showStatus('No se puede eliminar la última fila', 'error');
             return;
         }
 
@@ -2601,7 +2598,7 @@ class EnvialiteApp {
         this.updateRowAttributes();
 
         this.updateCSVFromTable();
-        this.showStatus('Row deleted', 'success');
+        this.showStatus('Fila eliminada', 'success');
     }
 
     updateCellAttributes() {
@@ -2681,7 +2678,7 @@ function showTab(tabName) {
                     // This is triggered by the onclick in the HTML, so we just need to ensure
                     // the tab shows. The logic here is simplified as the button handles the action.
                 } catch (error) {
-                    console.error('Auto-preview generation failed:', error);
+                    console.error('Error en generación automática de vista previa:', error);
                 }
             }
         }
@@ -2705,8 +2702,6 @@ function sendEmails() {
 function saveData() {
     window.envialiteApp.saveData();
 }
-
-
 
 function loadData() {
     window.envialiteApp.loadData();
@@ -2810,4 +2805,4 @@ function formatDoc(command, value = null) {
     document.execCommand(command, false, value);
 }
 
-// Preview Editor Global Functions
+// Preview Editor Global Functions</result>
