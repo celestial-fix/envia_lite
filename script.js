@@ -2639,6 +2639,14 @@ class EnvialiteApp {
 // Initialize the app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     window.envialiteApp = new EnvialiteApp();
+
+    // Set default language selector based on current URL
+    const langSwitch = document.getElementById('langSwitch');
+    if (langSwitch && window.location.pathname.startsWith('/es/')) {
+        langSwitch.value = 'es'; // Select Spanish option if we're on Spanish page
+    } else {
+        langSwitch.value = 'en'; // Select English option for English page
+    }
 });
 
 // Language switching function

@@ -383,6 +383,8 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
             lang = 'en'
             requested_path = requested_path[3:].lstrip('/')  # Remove "en/" prefix
 
+
+
         # Determine which file to serve based on the requested path and language
         path_to_serve = 'index.html'  # Default fallback
 
