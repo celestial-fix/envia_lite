@@ -16,6 +16,7 @@ import subprocess
 import webbrowser
 import time
 import platform
+import re
 import urllib.parse
 
 from email import encoders
@@ -293,10 +294,21 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
                         try:
                             msg = MIMEMultipart()
                             msg['From'] = email_data.get('from')
-                            msg['To'] = recipient_email
+
+                            # Handle multiple recipients in To, Cc, and Bcc fields
+                            if recipient_email:
+                                to_addrs = [addr.strip() for addr in re.split(r'[;,]', recipient_email) if addr.strip()]
+                                msg['To'] = ', '.join(to_addrs)
+
                             msg['Subject'] = email_data.get('subject')
-                            if email_data.get('cc'): msg['Cc'] = email_data.get('cc')
-                            if email_data.get('bcc'): msg['Bcc'] = email_data.get('bcc')
+
+                            if email_data.get('cc'):
+                                cc_addrs = [addr.strip() for addr in re.split(r'[;,]', email_data.get('cc')) if addr.strip()]
+                                msg['Cc'] = ', '.join(cc_addrs)
+
+                            if email_data.get('bcc'):
+                                bcc_addrs = [addr.strip() for addr in re.split(r'[;,]', email_data.get('bcc')) if addr.strip()]
+                                msg['Bcc'] = ', '.join(bcc_addrs)
 
                             # Convert plain text newlines to HTML line breaks
                             body_content = email_data.get('body', '')
