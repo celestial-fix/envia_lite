@@ -5,24 +5,25 @@ Single-user, no database, stores everything client-side.
 Now includes the GUI launcher logic.
 """
 import os
+import re
 import sys
+import time
 import json
 import base64
 import smtplib
 import argparse
+import platform
+import webbrowser
+import subprocess
 import socketserver
 import http.server
-import subprocess
-import webbrowser
-import time
-import platform
-import re
 import urllib.parse
 
 from email import encoders
 from email.mime.text import MIMEText
 from email.mime.base import MIMEBase
 from email.mime.multipart import MIMEMultipart
+from email.utils import formataddr, parseaddr
 
 # --- CRITICAL FIX FOR WINDOWS EMOJI/UNICODE PRINTING ---
 # On Windows, sys.stdout.encoding is often 'cp1252', which cannot handle emojis.
@@ -293,7 +294,9 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
                         recipient_email = email_data.get('to')
                         try:
                             msg = MIMEMultipart()
-                            msg['From'] = email_data.get('from')
+                            from_header = email_data.get('from')
+                            name, email = parseaddr(from_header)
+                            msg['From'] = formataddr((name, email))
 
                             # Handle multiple recipients in To, Cc, and Bcc fields
                             if recipient_email:
