@@ -12,7 +12,7 @@ from pathlib import Path
 project_dir = Path(os.getcwd())
 
 # Application info
-app_name = 'Envialite'
+app_name = 'Envía'
 app_version = '1.0.0'
 # CRITICAL FIX: The main script is now the consolidated server.py
 main_script = 'server.py' 
@@ -28,8 +28,10 @@ a = Analysis(
     datas=[
         # Include all web files (index.html, styles.css, script.js are assumed)
         (str(project_dir / 'index.html'), '.'),
+        (str(project_dir / 'index-ES.html'), '.'),
         (str(project_dir / 'styles.css'), '.'),
         (str(project_dir / 'script.js'), '.'),
+        (str(project_dir / 'script-ES.js'), '.'),
         # Include any other assets if they exist
         (str(project_dir / '*.md'), '.'),
     ],

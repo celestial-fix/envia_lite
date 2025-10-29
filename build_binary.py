@@ -5,7 +5,7 @@ import sys
 
 # --- Configuration ---
 SPEC_FILE = 'envialite.spec'
-APP_NAME = 'Envialite'
+APP_NAME = 'Envía'
 # Directories created by PyInstaller
 BUILD_DIR = 'build'
 DIST_DIR = 'dist'
