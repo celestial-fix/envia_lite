@@ -12,7 +12,7 @@ from pathlib import Path
 project_dir = Path(os.getcwd())
 
 # Application info
-app_name = 'Envialite'
+app_name = 'Envía'
 app_version = '1.0.0'
 # CRITICAL FIX: The main script is now the consolidated server.py
 main_script = 'server.py' 
@@ -28,8 +28,10 @@ a = Analysis(
     datas=[
         # Include all web files (index.html, styles.css, script.js are assumed)
         (str(project_dir / 'index.html'), '.'),
+        (str(project_dir / 'index-ES.html'), '.'),
         (str(project_dir / 'styles.css'), '.'),
         (str(project_dir / 'script.js'), '.'),
+        (str(project_dir / 'script-ES.js'), '.'),
         # Include any other assets if they exist
         (str(project_dir / '*.md'), '.'),
     ],
@@ -66,28 +68,27 @@ import platform
 
 current_platform = platform.system().lower()
 
-# Create base executable first
-# Setting console=False ensures the binary launches without a console window
-exe = EXE(
-    pyz,
-    a.scripts,
-    [],
-    exclude_binaries=True,
-    name=app_name.lower(),
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,
-    console=False, 
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-)
 
 if current_platform == 'darwin':  # macOS
-    # APP: create macOS app bundle
+    # For macOS, we create a minimal EXE and then wrap it in a BUNDLE.
+    # This is the standard for creating .app packages (which is a directory).
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,
+        name=app_name.lower(),
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+    )
     app = BUNDLE(
         exe,
         a.binaries,
@@ -102,17 +103,25 @@ if current_platform == 'darwin':  # macOS
             'CFBundleVersion': app_version,
             'CFBundleShortVersionString': app_version,
             'NSHighResolutionCapable': True,
-        },
+        }
     )
-else:  # Windows and Linux (Onedir Build)
-    # COLLECT: collect all files into a folder (This is your final artifact)
-    coll = COLLECT(
-        exe,
+else:  # Windows and Linux (One-file Build)
+    # For Windows/Linux, we create a single-file EXE that contains everything.
+    exe = EXE(
+        pyz,
+        a.scripts,
         a.binaries,
         a.zipfiles,
         a.datas,
+        name=app_name.lower(),
+        debug=False,
+        bootloader_ignore_signals=False,
         strip=False,
         upx=True,
-        upx_exclude=[],
-        name=app_name.lower(),
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
     )

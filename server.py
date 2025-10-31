@@ -10,6 +10,7 @@ import sys
 import time
 import json
 import base64
+import locale
 import smtplib
 import argparse
 import platform
@@ -61,23 +62,95 @@ def launch_gui():
     import tkinter as tk
     from tkinter import ttk
 
+    GUI_LANGUAGES = {
+        'en': {
+            'title': "Envía Launcher",
+            'port_label': "Port:",
+            'demo_checkbox': "Demo Mode (Safe Testing)",
+            'start_btn': "Start Server",
+            'stop_btn': "Stop Server",
+            'status_stopped': "Server stopped",
+            'status_starting': "Server starting on port {port}...",
+            'status_running': "Server running successfully on port {port}",
+            'status_error_port_range': "Error: Port must be between 1024 and 65535.",
+            'status_error_already_running': "Error: Server is already running.",
+            'status_error_start_failed': "Server failed to start (Code: {code}).\nERROR: {error_msg}",
+            'status_error_start_failed_generic': "Server failed to start.\nPossible cause: Missing Python dependencies or port conflict.",
+            'status_stopping': "Stopping server...",
+            'status_stopped_clean': "Server stopped",
+            'status_error_stopping': "Error stopping: {error_msg}",
+            'status_not_running': "Server is not running.",
+            'status_fatal_error': "Fatal Error: Failed to launch server process. Details: {error_msg}",
+            'status_open_browser_first': "Start the server before opening the browser.",
+            'web_app_lang_label': "Web App Language:",
+            'gui_lang_label': "Launcher Language:",
+        },
+        'es': {
+            'title': "Lanzador Envía",
+            'port_label': "Puerto:",
+            'demo_checkbox': "Modo Demo (Pruebas Seguras)",
+            'start_btn': "Iniciar Servidor",
+            'stop_btn': "Detener Servidor",
+            'status_stopped': "Servidor detenido",
+            'status_starting': "Iniciando servidor en el puerto {port}...",
+            'status_running': "Servidor iniciado correctamente en el puerto {port}",
+            'status_error_port_range': "Error: El puerto debe estar entre 1024 y 65535.",
+            'status_error_already_running': "Error: El servidor ya está en ejecución.",
+            'status_error_start_failed': "El servidor no pudo iniciar (Código: {code}).\nERROR: {error_msg}",
+            'status_error_start_failed_generic': "El servidor no pudo iniciar.\nCausa posible: Dependencias de Python faltantes o conflicto de puerto.",
+            'status_stopping': "Deteniendo servidor...",
+            'status_stopped_clean': "Servidor detenido",
+            'status_error_stopping': "Error al detener: {error_msg}",
+            'status_not_running': "El servidor no está en ejecución.",
+            'status_fatal_error': "Error fatal: No se pudo iniciar el proceso del servidor. Detalles: {error_msg}",
+            'status_open_browser_first': "Inicie el servidor antes de abrir el navegador.",
+            'web_app_lang_label': "Idioma de la Aplicación Web:",
+            'gui_lang_label': "Idioma del Lanzador:",
+        }
+    }
+
     class EnvialiteLauncher:
         def __init__(self, root):
             self.root = root
-            self.root.title("Envía lite")
-            self.root.geometry("350x250") 
+            # Detect system language for GUI localization
+            system_locale = locale.getdefaultlocale()[0]
+            initial_gui_lang = 'es' if system_locale and system_locale.startswith('es') else 'en'
+            self.gui_lang_var = tk.StringVar(value=initial_gui_lang)
+            self.web_app_lang_var = tk.StringVar(value=initial_gui_lang)
+
+            self.root.title(self._('title'))
+            self.root.geometry("400x300") 
             self.root.resizable(False, False)
 
             # sys.executable points to the current running binary/interpreter
             self.executable_path = sys.executable
 
             self.port_var = tk.StringVar(value="8000")
-            self.demo_var = tk.BooleanVar(value=True)
-            self.status_var = tk.StringVar(value="Server stopped")
+            self.demo_var = tk.BooleanVar(value=False)
+            self.status_var = tk.StringVar(value=self._('status_stopped'))
             self.server_process = None 
 
             self.create_gui()
             self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
+            self.gui_lang_var.trace_add('write', self.update_gui_texts)
+
+        def _(self, key):
+            """Translation helper function for GUI texts"""
+            return GUI_LANGUAGES.get(self.gui_lang_var.get(), GUI_LANGUAGES['en']).get(key, f'MISSING_TRANSLATION_{key}')
+
+        def update_gui_texts(self, *args):
+            """Updates all GUI texts based on the selected GUI language."""
+            self.root.title(self._('title'))
+            self.port_label.config(text=self._('port_label'))
+            self.demo_check.config(text=self._('demo_checkbox'))
+            self.start_btn.config(text=self._('start_btn'))
+            self.stop_btn.config(text=self._('stop_btn'))
+            # Update status if it's a default message
+            if self.status_var.get() == GUI_LANGUAGES['en']['status_stopped'] or \
+               self.status_var.get() == GUI_LANGUAGES['es']['status_stopped']:
+                self.status_var.set(self._('status_stopped'))
+            self.web_app_lang_label.config(text=self._('web_app_lang_label'))
+            self.gui_lang_label.config(text=self._('gui_lang_label'))
 
         def create_gui(self):
             """Create the simple GUI"""
@@ -88,33 +161,63 @@ def launch_gui():
             frame.grid_columnconfigure(1, weight=1)
             frame.grid_columnconfigure(0, weight=0)
 
+            row_idx = 0
+
             # Port Input
             ttk.Label(frame, text="Port:").grid(row=0, column=0, sticky=tk.W, pady=5)
+            self.port_label = ttk.Label(frame, text=self._('port_label'))
+            self.port_label.grid(row=row_idx, column=0, sticky=tk.W, pady=5)
             port_entry = ttk.Entry(frame, textvariable=self.port_var, width=10)
-            port_entry.grid(row=0, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
+            port_entry.grid(row=row_idx, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=5)
+            row_idx += 1
 
             # Demo Checkbox
-            demo_check = ttk.Checkbutton(frame, text="Demo Mode (Safe Testing)", variable=self.demo_var)
-            demo_check.grid(row=1, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
+            self.demo_check = ttk.Checkbutton(frame, text=self._('demo_checkbox'), variable=self.demo_var)
+            self.demo_check.grid(row=row_idx, column=0, columnspan=2, sticky=tk.W, pady=(10, 0))
+            row_idx += 1
+
+            # Web App Language Radio Buttons
+            self.web_app_lang_label = ttk.Label(frame, text=self._('web_app_lang_label'))
+            self.web_app_lang_label.grid(row=row_idx, column=0, sticky=tk.W, pady=(10, 0))
+            
+            web_app_lang_frame = ttk.Frame(frame)
+            web_app_lang_frame.grid(row=row_idx, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=(10, 0))
+            
+            ttk.Radiobutton(web_app_lang_frame, text="English", variable=self.web_app_lang_var, value="en").pack(side=tk.LEFT, padx=5)
+            ttk.Radiobutton(web_app_lang_frame, text="Español", variable=self.web_app_lang_var, value="es").pack(side=tk.LEFT, padx=5)
+            row_idx += 1
+
+            # GUI Language Radio Buttons
+            self.gui_lang_label = ttk.Label(frame, text=self._('gui_lang_label'))
+            self.gui_lang_label.grid(row=row_idx, column=0, sticky=tk.W, pady=(10, 0))
+
+            gui_lang_frame = ttk.Frame(frame)
+            gui_lang_frame.grid(row=row_idx, column=1, sticky=(tk.W, tk.E), padx=(10, 0), pady=(10, 0))
+
+            ttk.Radiobutton(gui_lang_frame, text="English", variable=self.gui_lang_var, value="en").pack(side=tk.LEFT, padx=5)
+            ttk.Radiobutton(gui_lang_frame, text="Español", variable=self.gui_lang_var, value="es").pack(side=tk.LEFT, padx=5)
+            row_idx += 1
 
             # Buttons
             button_frame = ttk.Frame(frame)
-            button_frame.grid(row=2, column=0, columnspan=2, pady=(20, 0))
-            
-            self.start_btn = ttk.Button(button_frame, text="Start Server", command=self.start_server, width=15)
+            button_frame.grid(row=row_idx, column=0, columnspan=2, pady=(20, 0))
+
+            self.start_btn = ttk.Button(button_frame, text=self._('start_btn'), command=self.start_server, width=15)
             self.start_btn.pack(side=tk.LEFT, padx=(0, 10))
 
-            self.stop_btn = ttk.Button(button_frame, text="Stop Server", command=self.stop_server, state=tk.DISABLED, width=15)
+            self.stop_btn = ttk.Button(button_frame, text=self._('stop_btn'), command=self.stop_server, state=tk.DISABLED, width=15)
             self.stop_btn.pack(side=tk.LEFT)
+            row_idx += 1
 
             # Status Label (larger font)
             status_label = ttk.Label(frame, textvariable=self.status_var, wraplength=300, justify=tk.LEFT, font=('TkDefaultFont', 10, 'bold'))
-            status_label.grid(row=3, column=0, columnspan=2, pady=(15, 5), sticky=tk.W)
+            status_label.grid(row=row_idx, column=0, columnspan=2, pady=(15, 5), sticky=tk.W)
+            row_idx += 1
 
             # URL Label (clickable)
             self.url_text = tk.StringVar(value='http://localhost:8000') 
-            self.url_label = ttk.Label(frame, textvariable=self.url_text, foreground="blue", cursor="hand2")
-            self.url_label.grid(row=4, column=0, columnspan=2, pady=(5,0), sticky=tk.W)
+            self.url_label = ttk.Label(frame, textvariable=self.url_text, foreground="blue", cursor="hand2") # Changed from row 4 to row_idx
+            self.url_label.grid(row=row_idx, column=0, columnspan=2, pady=(5,0), sticky=tk.W)
             self.url_label.bind("<Button-1>", self.open_browser)
 
         def update_button_state(self, is_running):
@@ -129,13 +232,13 @@ def launch_gui():
         def start_server(self):
             """Start the server by launching a new instance of the executable without the --gui flag"""
             if self.server_process:
-                self.status_var.set("Error: Server is already running.")
+                self.status_var.set(self._('status_error_already_running'))
                 return
 
             try:
                 port = int(self.port_var.get())
                 if not (1024 <= port <= 65535):
-                    self.status_var.set("Error: Port must be between 1024 and 65535.")
+                    self.status_var.set(self._('status_error_port_range'))
                     return
                 
                 # CRITICAL: Launch the same executable. Arguments are port and optional --demo.
@@ -145,7 +248,7 @@ def launch_gui():
                 if self.demo_var.get():
                     command.append('--demo')
                 
-                self.status_var.set(f"Server starting on port {port}...")
+                self.status_var.set(self._('status_starting').format(port=port))
                 
                 creationflags = 0
                 if sys.platform == 'win32':
@@ -158,10 +261,10 @@ def launch_gui():
                     stdout=subprocess.PIPE, 
                     stderr=subprocess.PIPE,
                     creationflags=creationflags,
-                    close_fds=False 
+                    close_fds=False
                 )
                 
-                time.sleep(0.5) # Give the OS time to start the process
+                time.sleep(0.05) # Give the OS time to start the process
                 poll_result = self.server_process.poll()
                 
                 if poll_result is not None: # Process died immediately
@@ -169,25 +272,27 @@ def launch_gui():
                     stdout, stderr = self.server_process.communicate(timeout=0.5)
                     self.server_process = None
                     
-                    error_message = f"Server failed to start (Code: {poll_result})."
+                    error_message = self._('status_error_start_failed').format(code=poll_result, error_msg="")
                     if stderr:
-                        error_message += f"\nERROR: {stderr.decode('utf-8', errors='ignore').strip()}"
+                        error_message = self._('status_error_start_failed').format(code=poll_result, error_msg=stderr.decode('utf-8', errors='ignore').strip())
                     else:
-                         error_message += "\nPossible cause: Missing Python dependencies or port conflict."
+                         error_message = self._('status_error_start_failed_generic')                    
                     
                     print(f"Server failed: {error_message}")
                     self.status_var.set(error_message[:200]) 
                     self.update_button_state(False)
                     return
 
-                self.status_var.set(f"Server running successfully on port {port}")
-                self.url_text.set(f'http://localhost:{port}')
+                self.status_var.set(self._('status_running').format(port=port))
+                # Construct URL with selected web app language
+                web_app_lang_prefix = f"{self.web_app_lang_var.get()}/" if self.web_app_lang_var.get() != 'en' else ''
+                self.url_text.set(f'http://localhost:{port}/{web_app_lang_prefix}')
                 self.update_button_state(True)
 
             except ValueError:
-                self.status_var.set('Error: Port must be a valid number.')
+                self.status_var.set(self._('status_error_port_range'))
             except Exception as e:
-                self.status_var.set(f'Fatal Error: Failed to launch server process. Details: {e}')
+                self.status_var.set(self._('status_fatal_error').format(error_msg=e))
                 if self.server_process:
                     self.server_process.terminate()
                     self.server_process = None
@@ -196,7 +301,7 @@ def launch_gui():
         def stop_server(self):
             """Stop the server by terminating the process"""
             if self.server_process:
-                self.status_var.set("Stopping server...")
+                self.status_var.set(self._('status_stopping'))
                 try:
                     self.server_process.terminate()
                     self.server_process.wait(timeout=1) 
@@ -204,14 +309,14 @@ def launch_gui():
                     self.server_process.kill()
                     self.server_process.wait()
                 except Exception as e:
-                    self.status_var.set(f'Error stopping: {e}')
+                    self.status_var.set(self._('status_error_stopping').format(error_msg=e))
                     return
                 
                 self.server_process = None
-                self.status_var.set("Server stopped")
+                self.status_var.set(self._('status_stopped_clean'))
                 self.update_button_state(False)
             else:
-                self.status_var.set("Server is not running.")
+                self.status_var.set(self._('status_not_running'))
                 self.update_button_state(False)
 
         def on_closing(self):
@@ -224,7 +329,7 @@ def launch_gui():
             if self.server_process:
                 webbrowser.open(self.url_text.get())
             else:
-                self.status_var.set("Start the server before opening the browser.")
+                self.status_var.set(self._('status_open_browser_first'))
 
     # The GUI will handle launching the server sub-process
     root = tk.Tk()
@@ -389,15 +494,13 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
         # Parse the URL path
         requested_path = self.path.lstrip('/')
 
-        # Extract language from path (e.g., "/es/" or "/en/")
-        lang = 'en'  # Default to English
-        if requested_path.startswith('es/'):
-            lang = 'es'
-            requested_path = requested_path[3:].lstrip('/')  # Remove "es/" prefix
-        elif requested_path.startswith('en/'):
-            lang = 'en'
-            requested_path = requested_path[3:].lstrip('/')  # Remove "en/" prefix
-
+        # Determine language from path prefix (e.g., /es/index.html)
+        # This logic is used when the GUI launcher constructs a URL like http://localhost:8000/es/
+        current_lang = 'en' # Default language
+        lang_prefix_match = re.match(r'^(en|es)/', requested_path)
+        if lang_prefix_match:
+            current_lang = lang_prefix_match.group(1)
+            requested_path = requested_path[len(lang_prefix_match.group(0)):].lstrip('/') # Remove the language prefix
 
 
         # Determine which file to serve based on the requested path and language
@@ -405,19 +508,30 @@ class EmailMergeHandler(http.server.SimpleHTTPRequestHandler):
 
         if not requested_path or requested_path == '/':
             # Serve language-specific index file
-            if lang == 'es':
+            if current_lang == 'es':
                 path_to_serve = 'index-ES.html'  # Spanish file
+            elif current_lang == 'en':
+                path_to_serve = 'index.html'
             else:
-                path_to_serve = 'index.html'     # English file (default)
+                path_to_serve = 'index.html'     # English file (fallback)
         elif requested_path == 'script.js':
             # Serve language-specific script file
-            if lang == 'es':
+            if current_lang == 'es':
                 path_to_serve = 'script-ES.js'  # Spanish script
+            elif current_lang == 'en':
+                path_to_serve = 'script.js'
             else:
-                path_to_serve = 'script.js'    # English script (default)
+                path_to_serve = 'script.js'    # English script (fallback)
         else:
             # For other resources (CSS, etc.), serve as-is
             path_to_serve = requested_path
+
+        # If the request is for a specific language's index/script, ensure it's served
+        if requested_path == 'index.html' and current_lang == 'es':
+            path_to_serve = 'index-ES.html'
+
+        if requested_path == 'script.js' and current_lang == 'es':
+            path_to_serve = 'script-ES.js'
 
         try:
             full_path = resource_path(path_to_serve)
