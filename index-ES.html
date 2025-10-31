@@ -29,7 +29,8 @@
 
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-            <button class="tab-btn active" onclick="showTab('settings')">📧 Cuenta</button>
+            <button class="tab-btn" onclick="showTab('help')">❓ Ayuda</button>
+            <button class="tab-btn" onclick="showTab('settings')">📧 Cuenta</button>
             <button class="tab-btn" onclick="showTab('template')">📝 Plantilla</button>
             <button class="tab-btn" onclick="showTab('data')">📊 Datos</button>
             <button class="tab-btn" onclick="showTab('attachments')">📎 Adjuntos</button>
@@ -38,7 +39,59 @@
         </div>
 
         <!-- Tab Content Cards -->
-        <div id="settings" class="tab-card active">
+        <div id="help" class="tab-card">
+            <div class="card-header">
+                <h2>❓ Ayuda</h2>
+            </div>
+            <div class="card-content">
+                <h3>¡Bienvenido a Envía!</h3>
+                <p>Esta es una herramienta de combinación de correos. Haz clic en los encabezados a continuación para aprender cómo usar cada pestaña:</p>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📧 Pestaña Cuenta</h4>
+                    <div class="collapsible-content">
+                        <p>Configura los ajustes de tu cuenta de correo (servidor SMTP, puerto, usuario y contraseña). También puedes probar tu conexión y guardar/limpiar tu configuración.</p>
+                        <p>Para cuentas de Google Workspace: deberás crear una contraseña de aplicación: <a href=https://myaccount.google.com/apppasswords>https://myaccount.google.com/apppasswords</a>, esta será la contraseña del usuario SMTP.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📝 Pestaña Plantilla</h4>
+                    <div class="collapsible-content">
+                        <p>Escribe el correo que quieres enviar. Puedes usar variables como <code>{{nombre}}</code> que serán reemplazadas con datos de tu fuente de datos. El editor de texto enriquecido permite un formato básico.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📊 Pestaña Datos</h4>
+                    <div class="collapsible-content">
+                        <p>Importa tus datos desde un archivo CSV o pégalos directamente en la tabla. La primera fila debe ser la de los encabezados, que se usarán como nombres de variables en tu plantilla. Puedes añadir/eliminar filas y columnas, y exportar tus datos.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📎 Pestaña Adjuntos</h4>
+                    <div class="collapsible-content">
+                        <p>Sube los archivos que quieras adjuntar a tus correos. Puedes seleccionar adjuntos que se enviarán a todos los destinatarios, o usar una variable en la columna "Adjuntos" de tus datos para especificar diferentes adjuntos para cada destinatario.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">👁️ Pestaña Vista Previa</h4>
+                    <div class="collapsible-content">
+                        <p>Mira cómo se verán tus correos antes de enviarlos. Puedes navegar por cada correo, realizar ediciones individuales y excluir correos específicos de la combinación de correspondencia.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📈 Pestaña Resultados</h4>
+                    <div class="collapsible-content">
+                        <p>Después de enviar los correos, puedes ver los resultados de la operación en esta pestaña, incluyendo el estado de éxito/fallo para cada correo y mensajes de error detallados.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="settings" class="tab-card">
             <div class="card-header">
                 <h2>📧 Configuración de Cuenta de Correo</h2>
                 <div class="header-buttons">
@@ -105,6 +158,7 @@
                             <input type="email" id="fromEmail" placeholder="tu-correo@gmail.com" />
                         </div>
                     </div>
+                    <hr>
                     <div class="form-row">
                         <div class="form-group">
                             <label for="toEmail">Destinatario:</label>
@@ -123,6 +177,7 @@
                         <div class="form-group">
                         </div>
                     </div>
+                    <hr>
                     <div class="form-group">
                         <label for="emailSubject">Asunto del Correo:</label>
                         <input type="text" id="emailSubject" placeholder="Hola {{nombre}}!" />

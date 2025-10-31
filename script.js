@@ -49,12 +49,27 @@ class EnvialiteApp {
 
         // Set up event listeners
         this.setupEventListeners();
+        this.setupCollapsibleSections(); // New line here
 
         this.fetchServerStatus();
         // Initialize table editor
         this.initializeTableEditor();
 
         console.log('Envialite initialized');
+    }
+
+    setupCollapsibleSections() {
+        document.querySelectorAll('.collapsible-header').forEach(header => {
+            header.addEventListener('click', () => {
+                const content = header.nextElementSibling;
+                header.classList.toggle('active');
+                if (content.style.maxHeight) {
+                    content.style.maxHeight = null;
+                } else {
+                    content.style.maxHeight = content.scrollHeight + 'px';
+                }
+            });
+        });
     }
 
     setupEventListeners() {
@@ -2663,41 +2678,43 @@ function switchLanguage(lang) {
 
 // Tab functionality
 function showTab(tabName) {
-    // Hide all tab cards
+    const selectedTab = document.getElementById(tabName);
+    const clickedButton = event.target;
+
+    // If the clicked tab is already active, hide it
+    if (selectedTab.classList.contains('active')) {
+        selectedTab.classList.remove('active');
+        clickedButton.classList.remove('active');
+        return; // Exit the function
+    }
+
+    // Hide all other tab cards
     const tabCards = document.querySelectorAll('.tab-card');
     tabCards.forEach(card => {
         card.classList.remove('active');
     });
 
-    // Remove active class from all tab buttons
+    // Remove active class from all other tab buttons
     const tabBtns = document.querySelectorAll('.tab-btn');
     tabBtns.forEach(btn => {
         btn.classList.remove('active');
     });
 
-    // Show selected tab card
-    const selectedTab = document.getElementById(tabName);
+    // Show the selected tab and set its button to active
     if (selectedTab) {
         selectedTab.classList.add('active');
+        clickedButton.classList.add('active');
 
         // Auto-generate previews when preview tab is shown
         if (tabName === 'preview' && window.envialiteApp) {
-            // Only generate if we don't have previews yet or if CSV data has changed
             if (window.envialiteApp.emailPreviews.length === 0) {
                 try {
-                    // The previewEmails function will handle getting data and generating previews
-                    // This is triggered by the onclick in the HTML, so we just need to ensure
-                    // the tab shows. The logic here is simplified as the button handles the action.
+                    // The previewEmails function is handled by the onclick in the HTML
                 } catch (error) {
                     console.error('Auto-preview generation failed:', error);
                 }
             }
         }
-    }
-
-    // Add active class to clicked button
-    if (event && event.target) {
-        event.target.classList.add('active');
     }
 }
 

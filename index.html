@@ -29,7 +29,8 @@
 
         <!-- Tab Navigation -->
         <div class="tab-navigation">
-            <button class="tab-btn active" onclick="showTab('settings')">📧 Account</button>
+            <button class="tab-btn" onclick="showTab('help')">❓ Help</button>
+            <button class="tab-btn" onclick="showTab('settings')">📧 Account</button>
             <button class="tab-btn" onclick="showTab('template')">📝 Template</button>
             <button class="tab-btn" onclick="showTab('data')">📊 Data</button>
             <button class="tab-btn" onclick="showTab('attachments')">📎 Attachments</button>
@@ -38,7 +39,58 @@
         </div>
 
         <!-- Tab Content Cards -->
-        <div id="settings" class="tab-card active">
+        <div id="help" class="tab-card">
+            <div class="card-header">
+                <h2>❓ Help</h2>
+            </div>
+            <div class="card-content">
+                <h3>Welcome to Envía!</h3>
+                <p>This is a personal mail merge tool. Click on the headings below to learn how to use each tab:</p>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📧 Account Tab</h4>
+                    <div class="collapsible-content">
+                        <p>Configure your email account settings (SMTP server, port, username, and password). You can also test your connection and save/clear your settings.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📝 Template Tab</h4>
+                    <div class="collapsible-content">
+                        <p>Write the email you want to send. You can use variables like <code>{{name}}</code> that will be replaced with data from your data source. The rich text editor allows for basic formatting.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📊 Data Tab</h4>
+                    <div class="collapsible-content">
+                        <p>Import your data from a CSV file or paste it directly into the table. The first row should be the headers, which will be used as variable names in your template. You can add/remove rows and columns, and export your data.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📎 Attachments Tab</h4>
+                    <div class="collapsible-content">
+                        <p>Upload files that you want to attach to your emails. You can select attachments that will be sent to all recipients, or use a variable in the "Attachments" column of your data to specify different attachments for each recipient.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">👁️ Preview Tab</h4>
+                    <div class="collapsible-content">
+                        <p>See how your emails will look before sending them. You can navigate through each email, make individual edits, and exclude specific emails from the mail merge.</p>
+                    </div>
+                </div>
+
+                <div class="collapsible-section">
+                    <h4 class="collapsible-header">📈 Results Tab</h4>
+                    <div class="collapsible-content">
+                        <p>After sending the emails, you can see the results of the operation in this tab, including success/failure status for each email and detailed error messages.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div id="settings" class="tab-card">
             <div class="card-header">
                 <h2>📧 Email Account Settings</h2>
                 <div class="header-buttons">
